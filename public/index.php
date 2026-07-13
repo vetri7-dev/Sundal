@@ -5,19 +5,22 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Shared-hosting subdirectory fix:
-// Strip /sundal prefix from REQUEST_URI so Laravel's router matches routes
-// without the subdir prefix. Ziggy location is fixed in HandleInertiaRequests
-// to reconstruct the full URL using APP_URL + stripped request URI.
-$subdir = '/sundal';
+// Shared-hosting subdirectory fix for LiteSpeed/Apache
+// Strip /sundal or /sundal/public prefix from REQUEST_URI so Laravel routes correctly
 if (isset($_SERVER['REQUEST_URI'])) {
     $uri = $_SERVER['REQUEST_URI'];
-    if (str_starts_with($uri, $subdir . '/') || $uri === $subdir) {
-        $_SERVER['REQUEST_URI'] = substr($uri, strlen($subdir)) ?: '/';
+    // Remove query string for comparison
+    $path = strstr($uri, '?', true) ?: $uri;
+    $query = strstr($uri, '?') ?: '';
+
+    // Strip /sundal/public first (more specific), then /sundal
+    foreach (['/sundal/public', '/sundal'] as $prefix) {
+        if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+            $stripped = substr($path, strlen($prefix)) ?: '/';
+            $_SERVER['REQUEST_URI'] = $stripped . $query;
+            break;
+        }
     }
-}
-if (isset($_SERVER['PHP_SELF']) && str_starts_with($_SERVER['PHP_SELF'], $subdir)) {
-    $_SERVER['PHP_SELF'] = substr($_SERVER['PHP_SELF'], strlen($subdir)) ?: '/';
 }
 
 // Determine if the application is in maintenance mode...
