@@ -1,9 +1,10 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Let actual files in public/ be served directly
-    RewriteRule ^public/ - [L]
+    # If the requested file exists inside public/ serve it directly
+    RewriteCond %{DOCUMENT_ROOT}/sundal/public/$1 -f
+    RewriteRule ^(.+)$ public/$1 [L]
 
-    # Route everything else to public/index.php
-    RewriteRule ^(.*)$ public/index.php [L,QSA]
+    # Everything else goes through Laravel's index.php
+    RewriteRule ^ public/index.php [L]
 </IfModule>
