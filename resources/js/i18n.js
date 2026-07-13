@@ -15,7 +15,9 @@ const customBackend = {
     this.options = backendOptions;
   },
   read: function(language, namespace, callback) {
-    const loadPath = window.route ? window.route('translations', language) : `/translations/${language}`;
+    const loadPath = window.route 
+        ? window.route('translations', language) 
+        : `${window.Ziggy?.url || ''}/translations/${language}`;
     
     fetch(loadPath)
       .then(response => response.json())
