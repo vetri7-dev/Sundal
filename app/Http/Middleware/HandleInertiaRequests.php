@@ -139,6 +139,7 @@ class HandleInertiaRequests extends Middleware
             'isImpersonating' => session('impersonated_by') ? true : false,
             'ziggy' => fn(): array => [
                 ...(new Ziggy)->toArray(),
+                'url'      => rtrim($request->root(), '/'),
                 'location' => $request->url(),
             ],
             'flash' => [
