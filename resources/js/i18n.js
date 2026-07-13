@@ -112,7 +112,12 @@ i18n
         defaultNS: 'translation',
         
         partialBundledLanguages: true,
-        loadOnInitialization: true
+        loadOnInitialization: true,
+        
+        // Prevent blank screen: don't suspend components while translations load
+        react: {
+            useSuspense: false,
+        },
     });
 
 // Export the initialized instance
