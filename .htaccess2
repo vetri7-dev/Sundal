@@ -1,9 +1,13 @@
+DirectoryIndex index.php
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Pass existing files in public/ through directly
-    RewriteRule ^public/ - [L]
+    # Serve real files/directories directly (assets, images, fonts)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
 
-    # Route everything else to Laravel
-    RewriteRule ^(.*)$ public/index.php [L,QSA]
+    # Everything else goes to our root index.php
+    RewriteRule ^ index.php [L]
 </IfModule>
