@@ -5,23 +5,8 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Shared-hosting subdirectory fix for LiteSpeed/Apache
-// Strip /sundal or /sundal/public prefix from REQUEST_URI so Laravel routes correctly
-if (isset($_SERVER['REQUEST_URI'])) {
-    $uri = $_SERVER['REQUEST_URI'];
-    // Remove query string for comparison
-    $path = strstr($uri, '?', true) ?: $uri;
-    $query = strstr($uri, '?') ?: '';
-
-    // Strip /sundal/public first (more specific), then /sundal
-    foreach (['/sundal/public', '/sundal'] as $prefix) {
-        if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
-            $stripped = substr($path, strlen($prefix)) ?: '/';
-            $_SERVER['REQUEST_URI'] = $stripped . $query;
-            break;
-        }
-    }
-}
+// NOTE: No REQUEST_URI stripping here. The sundal/index.php entry point
+// keeps REQUEST_URI as /sundal/... so Symfony auto-detects /sundal as base URL.
 
 // Determine if the application is in maintenance mode...
 if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
