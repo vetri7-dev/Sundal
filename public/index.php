@@ -5,14 +5,16 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Strip subdirectory prefix so routes match correctly on shared hosting
-// When deployed at /sundal/, REQUEST_URI contains /sundal/foo but routes expect /foo
+// Shared-hosting subdirectory fix:
+// Strip /sundal prefix from REQUEST_URI so Laravel's router matches routes
+// without the subdir prefix. Ziggy location is fixed in HandleInertiaRequests
+// to reconstruct the full URL using APP_URL + stripped request URI.
 $subdir = '/sundal';
-if (isset($_SERVER['REQUEST_URI']) && str_starts_with($_SERVER['REQUEST_URI'], $subdir)) {
-    $_SERVER['REQUEST_URI'] = substr($_SERVER['REQUEST_URI'], strlen($subdir)) ?: '/';
-}
-if (isset($_SERVER['PATH_INFO']) && str_starts_with($_SERVER['PATH_INFO'], $subdir)) {
-    $_SERVER['PATH_INFO'] = substr($_SERVER['PATH_INFO'], strlen($subdir)) ?: '/';
+if (isset($_SERVER['REQUEST_URI'])) {
+    $uri = $_SERVER['REQUEST_URI'];
+    if (str_starts_with($uri, $subdir . '/') || $uri === $subdir) {
+        $_SERVER['REQUEST_URI'] = substr($uri, strlen($subdir)) ?: '/';
+    }
 }
 if (isset($_SERVER['PHP_SELF']) && str_starts_with($_SERVER['PHP_SELF'], $subdir)) {
     $_SERVER['PHP_SELF'] = substr($_SERVER['PHP_SELF'], strlen($subdir)) ?: '/';
