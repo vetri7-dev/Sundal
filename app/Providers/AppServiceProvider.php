@@ -26,14 +26,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // TEMPORARILY DISABLED FOR DEBUGGING
-        // $appUrl = config('app.url');
-        // if ($appUrl) {
-        //     URL::forceRootUrl($appUrl);
-        //     if (str_starts_with($appUrl, 'https')) {
-        //         URL::forceScheme('https');
-        //     }
-        // }
+        // Note: URL::forceRootUrl is NOT needed here.
+        // Symfony's Request auto-detects /sundal as the base URL from
+        // SCRIPT_NAME (/sundal/index.php), so url('/') and route() helpers
+        // naturally return https://codecartz.com/sundal/... URLs.
 
         // Register the UserObserver
         User::observe(UserObserver::class);

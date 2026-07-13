@@ -137,10 +137,10 @@ class HandleInertiaRequests extends Middleware
             ],
             'workspaceSettings' => fn() => $this->getWorkspaceSettings($request),
             'isImpersonating' => session('impersonated_by') ? true : false,
-            'ziggy' => fn(): array => array_merge((new Ziggy)->toArray(), [
-                'url'      => rtrim(config('app.url'), '/'),
-                'location' => rtrim(config('app.url'), '/') . $request->getRequestUri(),
-            ]),
+            'ziggy' => fn(): array => [
+                ...(new Ziggy)->toArray(),
+                'location' => $request->url(),
+            ],
             'flash' => [
                 'success'     => $request->session()->get('success'),
                 'error'       => $request->session()->get('error'),
