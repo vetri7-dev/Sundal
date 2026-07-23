@@ -21,50 +21,64 @@ class TranslationController extends BaseController
             $locale = 'en';
         }
 
-        // Always determine direction based on locale
-        $direction = in_array($locale, ['ar', 'he']) ? 'right' : 'left';
-        $layoutDirection = in_array($locale, ['ar', 'he']) ? 'rtl' : 'ltr';
-
-        // Always store language preference in cookie for persistence
-        Cookie::queue('app_language', $locale, 60 * 24 * 30); // 30 days
-        Cookie::queue('app_direction', $layoutDirection, 60 * 24 * 30);
-
-        // Demo mode handling
-        if (config('app.is_demo') !== true) {
+        // Determine if this is an RTL language
+        $isRtlLanguage = in_array($locale, ['ar', 'he']);
+        
+        // Get current layout direction from settings
+        $currentLayoutDirection = 'left'; // default
+        
+        // Check if demo mode
+        $isDemo = config('app.is_demo') || (request()->cookie('is_demo') === 'true');
+        
+        if ($isDemo) {
+            // Demo mode: use cookies for layout direction
+            $currentLayoutDirection = request()->cookie('layoutDirection', 'left');
+            
+            // Auto-update layout direction when switching to/from Arabic in demo mode
+            if ($isRtlLanguage && $currentLayoutDirection === 'left') {
+                $currentLayoutDirection = 'right';
+            } elseif (!$isRtlLanguage && $currentLayoutDirection === 'right') {
+                // Only switch to LTR if no other RTL language is being used
+                $currentLayoutDirection = 'left';
+            }
+        } else {
+            // Normal mode: use database settings
             if (auth()->check()) {
-                // Update authenticated user's language setting
-                auth()->user()->update(['lang' => $locale]);
+                // auth()->user()->update(['lang' => $locale]);
 
-                // Only update layoutDirection for RTL languages (ar, he)
-                // Keep existing direction value for other languages
-                if (in_array($locale, ['ar', 'he'])) {
-                    Setting::updateOrCreate(
-                        [
-                            'key' => 'layoutDirection',
-                            'user_id' => auth()->id()
-                        ],
-                        [
-                            'value' => 'right'
-                        ]
-                    );
-                }
+                // $userSettings = settings();
+                // $currentLayoutDirection = $userSettings['layoutDirection'] ?? 'left';
+                
+                
+                // // Auto-update layout direction when switching to/from Arabic
+                // if ($isRtlLanguage && $currentLayoutDirection === 'left') {
+                //     // Switching to Arabic - update to RTL
+                //     $currentLayoutDirection = 'right';
+                // } elseif (!$isRtlLanguage && $currentLayoutDirection === 'right') {
+                //     // Switching from Arabic to non-RTL language - update to LTR
+                //     $currentLayoutDirection = 'left';
+                // }
             } else {
-                // For unauthenticated users on auth pages, use superadmin's language
+                // For unauthenticated users, get from superadmin settings
                 $superAdmin = User::where('type', 'superadmin')->first();
-                if ($superAdmin && request()->is('login', 'register', 'password/*', 'email/*')) {
-                    $locale = $superAdmin->lang ?? 'en';
-                    $path = resource_path("lang/{$locale}.json");
-
-                    if (!File::exists($path)) {
-                        $path = resource_path("lang/en.json");
-                        $locale = 'en';
-                    }
-
-                    // Re-determine direction based on superadmin's locale
-                    $direction = in_array($locale, ['ar', 'he']) ? 'right' : 'left';
-                    $layoutDirection = in_array($locale, ['ar', 'he']) ? 'rtl' : 'ltr';
+                if ($superAdmin) {
+                    $superAdminSettings = settings($superAdmin->id);
+                    $currentLayoutDirection = $superAdminSettings['layoutDirection'] ?? 'left';
                 }
             }
+        }
+        
+        // Convert to CSS direction value
+        $layoutDirection = $currentLayoutDirection === 'right' ? 'rtl' : 'ltr';
+
+        // Store in cookies if in demo mode
+        if ($isDemo) {
+            $cookieOptions = 60 * 24 * 365; // 1 year for demo mode
+            Cookie::queue('app_language', $locale, $cookieOptions);
+            Cookie::queue('app_direction', $layoutDirection, $cookieOptions);
+            Cookie::queue('layoutDirection', $currentLayoutDirection, $cookieOptions);
+            Cookie::queue('taskly_demo_language', $locale, $cookieOptions);
+            Cookie::queue('selected_language', $locale, $cookieOptions); // Add this for consistency
         }
 
         $translations = json_decode(File::get($path), true);
@@ -73,7 +87,8 @@ class TranslationController extends BaseController
         $response = [
             'translations' => $translations,
             'layoutDirection' => $layoutDirection,
-            'locale' => $locale
+            'locale' => $locale,
+            'isDemo' => $isDemo
         ];
 
         return response()->json($response);
@@ -81,11 +96,16 @@ class TranslationController extends BaseController
 
     // Add a method to get the initial locale
     public function getInitialLocale()
-    {
-        // First check cookie for all users for consistency
-        $cookieLang = Cookie::get('app_language');
-        if ($cookieLang) {
-            return response($cookieLang);
+    {     
+        // Check if demo mode
+        $isDemo = config('app.is_demo') || (request()->cookie('is_demo') === 'true');
+
+        if ($isDemo) {
+            // In demo mode, check cookie first
+            $cookieLang = Cookie::get('taskly_demo_language') ?: Cookie::get('app_language');
+            if ($cookieLang) {
+                return response($cookieLang);
+            }
         }
 
         if (auth()->check()) {

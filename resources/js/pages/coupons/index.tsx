@@ -5,20 +5,54 @@ import { usePage } from '@inertiajs/react';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 
+const CopyableCode = ({ code, t }: { code: string, t: any }) => {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const handleReset = (e: CustomEvent) => {
+      if (e.detail.code !== code) {
+        setCopied(false);
+      }
+    };
+    window.addEventListener('coupon-copied', handleReset as EventListener);
+    return () => window.removeEventListener('coupon-copied', handleReset as EventListener);
+  }, [code]);
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.dispatchEvent(new CustomEvent('coupon-copied', { detail: { code } }));
+      setTimeout(() => {
+        setCopied((prev) => prev ? false : prev);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start">
+      <button
+        onClick={handleCopyCode}
+        className="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors font-mono text-sm cursor-pointer"
+        type="button"
+      >
+        {code}
+      </button>
+      {copied && (
+        <span className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium ml-3">
+          {t('Copied!')}
+        </span>
+      )}
+    </div>
+  );
+};
+
 export default function CouponsPage() {
   const { t } = useTranslation();
   const { flash } = usePage().props as any;
   const [config, setConfig] = useState(couponsConfig);
-  
-  // Show flash messages if they exist
-  useEffect(() => {
-    if (flash?.success) {
-      toast.success(flash.success);
-    }
-    if (flash?.error) {
-      toast.error(flash.error);
-    }
-  }, [flash]);
 
   // Customize the config with translations and hooks
   useEffect(() => {
@@ -26,10 +60,19 @@ export default function CouponsPage() {
       ...couponsConfig,
       table: {
         ...couponsConfig.table,
-        columns: couponsConfig.table.columns.map(col => ({
-          ...col,
-          label: t(col.label)
-        }))
+        columns: couponsConfig.table.columns.map(col => {
+          if (col.key === 'code') {
+            return {
+              ...col,
+              label: t(col.label),
+              render: (value: string) => <CopyableCode code={value} t={t} />
+            };
+          }
+          return {
+            ...col,
+            label: t(col.label)
+          };
+        })
       },
       form: {
         ...couponsConfig.form,
@@ -76,13 +119,13 @@ export default function CouponsPage() {
           return data;
         },
         afterCreate: (data: any) => {
-          toast.success(t('Coupon "{{name}}" created successfully', { name: data.name }));
+          // Flash message from controller will be shown
         },
         afterUpdate: (data: any) => {
-          toast.success(t('Coupon "{{name}}" updated successfully', { name: data.name }));
+          // Flash message from controller will be shown
         },
         afterDelete: () => {
-          toast.success(t('Coupon deleted successfully'));
+          // Flash message from controller will be shown
         }
       }
     });

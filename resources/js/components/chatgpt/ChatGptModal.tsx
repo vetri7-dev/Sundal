@@ -40,6 +40,37 @@ export function ChatGptModal({
   const [selectedText, setSelectedText] = useState('');
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          handleClose();
+        }
+      };
+      document.addEventListener('keydown', handleKeyDown, { capture: true });
+      return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Force remove inert from document to allow ChatGPT modal interaction
+      const removeInert = () => {
+        document.body.removeAttribute('inert');
+        document.documentElement.removeAttribute('inert');
+        const allElements = document.querySelectorAll('[inert]');
+        allElements.forEach(el => el.removeAttribute('inert'));
+      };
+      
+      removeInert();
+      // Keep removing inert as Radix might re-add it
+      const interval = setInterval(removeInert, 100);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isOpen]);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error(t('Please enter a prompt'));
@@ -118,9 +149,22 @@ export function ChatGptModal({
   }
 
   const modalContent = (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex }}>
-      <div className="fixed inset-0 bg-black/50" />
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 pointer-events-auto border" style={{ zIndex: zIndex + 1 }}>
+    <div 
+      className="fixed inset-0 flex items-center justify-center" 
+      style={{ zIndex: 99999 }}
+      data-chatgpt-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+    >
+      <div className="fixed inset-0 bg-black/30" />
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 pointer-events-auto border relative" 
+        style={{ zIndex: 100000 }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-blue-500" />
@@ -128,7 +172,7 @@ export function ChatGptModal({
           </h2>
           <button
             onClick={handleClose}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -142,7 +186,7 @@ export function ChatGptModal({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent style={{ zIndex: zIndex + 10 }}>
+                <SelectContent style={{ zIndex: 100001 }}>
                   {languageData.map((lang) => (
                     <SelectItem key={lang.code} value={lang.code}>
                       <ReactCountryFlag
@@ -162,7 +206,7 @@ export function ChatGptModal({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent style={{ zIndex: zIndex + 10 }}>
+                <SelectContent style={{ zIndex: 100001 }}>
                   <SelectItem value="low">{t("Low")} (0.3)</SelectItem>
                   <SelectItem value="medium">{t("Medium")} (0.7)</SelectItem>
                   <SelectItem value="high">{t("High")} (0.9)</SelectItem>

@@ -68,61 +68,65 @@ class DashboardController extends Controller
         try {
             $user = auth()->user();
             $workspace = $this->getCurrentWorkspace($user);
+            $role = $this->getUserWorkspaceRole($user, $workspace);
             
-            // Get actual data from database
-            $totalUsers = $this->getTotalUsers($user);
-            $activeProjects = $this->getActiveProjects($workspace);
-            $completedTasks = $this->getCompletedTasks($workspace);
-            $revenue = $this->getRevenue($user);
+            // Build cards based on workspace role and permissions
+            $cards = [];
             
-            $projects = $this->getProjectStats($workspace);
-            $tasks = $this->getTaskStats($workspace);
-            $taskStages = $this->getTaskStages($workspace);
-            $timesheets = $this->getTimesheetStats($workspace);
-            $budgets = $this->getBudgetStats($workspace);
-            $expenses = $this->getExpenseStats($workspace);
-            $invoices = $this->getInvoiceStats($workspace);
-            $bugs = $this->getBugStats($workspace);
-            $recentActivities = $this->getRecentActivities($workspace);
+            // Only show user count for company workspace role (owner)
+            if ($role === 'company' && $this->checkPermission('user_view_any')) {
+                $cards[] = [
+                    'title' => __('Total Users'),
+                    'value' => $this->getTotalUsers($user, $workspace, $role),
+                    'icon' => 'Users',
+                ];
+            }
+            
+            // Show projects if user has permission
+            if ($this->checkPermission('project_view_any')) {
+                $cards[] = [
+                    'title' => __('Active Projects'),
+                    'value' => $this->getActiveProjects($workspace, $user, $role),
+                    'icon' => 'Activity',
+                ];
+            }
+            
+            // Show tasks if user has permission
+            if ($this->checkPermission('task_view_any')) {
+                $cards[] = [
+                    'title' => __('Tasks Completed'),
+                    'value' => $this->getCompletedTasks($workspace, $user, $role),
+                    'icon' => 'UserPlus',
+                ];
+            }
+            
+            // Show revenue only for company workspace role with invoice permission
+            if ($role === 'company' && $this->checkPermission('invoice_view_any')) {
+                $cards[] = [
+                    'title' => __('Total Received'),
+                    'value' => $this->getRevenue($user, $workspace, $role),
+                    'format' => 'currency',
+                    'icon' => 'DollarSign',
+                ];
+            }
             
             $dashboardData = [
-                'cards' => [
-                    [
-                        'title' => __('Total Users'),
-                        'value' => $totalUsers,
-                        'icon' => 'Users',
-                    ],
-                    [
-                        'title' => __('Active Projects'),
-                        'value' => $activeProjects,
-                        'icon' => 'Activity',
-                    ],
-                    [
-                        'title' => __('Tasks Completed'),
-                        'value' => $completedTasks,
-                        'icon' => 'UserPlus',
-                    ],
-                    [
-                        'title' => __('Revenue'),
-                        'value' => $revenue,
-                        'format' => 'currency',
-                        'icon' => 'DollarSign',
-                    ]
-                ],
-                'projects' => $projects,
-                'tasks' => $tasks,
-                'taskStages' => $taskStages,
-                'timesheets' => $timesheets,
-                'budgets' => $budgets,
-                'expenses' => $expenses,
-                'invoices' => $invoices,
-                'bugs' => $bugs,
-                'recentActivities' => $recentActivities,
+                'cards' => $cards,
+                'projects' => $this->checkPermission('project_view_any') ? $this->getProjectStats($workspace, $user, $role) : null,
+                'tasks' => $this->checkPermission('task_view_any') ? $this->getTaskStats($workspace, $user, $role) : null,
+                'taskStages' => $this->checkPermission('task_view_any') ? $this->getTaskStages($workspace, $user, $role) : null,
+                'timesheets' => $this->checkPermission('timesheet_view_any') ? $this->getTimesheetStats($workspace, $user, $role) : null,
+                'budgets' => $this->checkPermission('budget_view_any') ? $this->getBudgetStats($workspace, $user, $role) : null,
+                'expenses' => $this->checkPermission('expense_view_any') ? $this->getExpenseStats($workspace, $user, $role) : null,
+                'invoices' => (($role === 'company' || $role === 'client') && $this->checkPermission('invoice_view_any')) ? $this->getInvoiceStats($workspace, $user, $role) : null,
+                'bugs' => $this->checkPermission('bug_view_any') ? $this->getBugStats($workspace, $user, $role) : null,
+                'recentActivities' => $this->getRecentActivities($workspace, $user, $role),
                 'currentWorkspace' => $workspace
             ];
 
             return Inertia::render('dashboard', [
                 'dashboardData' => $dashboardData,
+                'userWorkspaceRole' => $role,
                 'permissions' => []
             ]);
         } catch (\Exception $e) {
@@ -165,7 +169,12 @@ class DashboardController extends Controller
     private function getUserWorkspaceRole($user, $workspace)
     {
         try {
-            if (!$workspace) return null;
+            if (!$workspace) return 'member';
+            
+            // Check if user is workspace owner
+            if ($workspace->owner_id === $user->id) {
+                return 'company';
+            }
             
             $member = \App\Models\WorkspaceMember::where('user_id', $user->id)
                 ->where('workspace_id', $workspace->id)
@@ -177,21 +186,18 @@ class DashboardController extends Controller
         }
     }
     
-    private function getTotalUsers($user)
+    private function getTotalUsers($user, $workspace, $role)
     {
         try {
-            // Super admin sees all users
-            if ($user->type === 'superadmin' || $user->type === 'super admin') {
-                if (class_exists('\App\Models\User')) {
-                    return \App\Models\User::count();
-                }
-                return 1;
+            // Only company workspace role sees user count
+            if ($role !== 'company' || !$workspace) {
+                return 0;
             }
             
-            // Regular users see workspace members
-            $workspace = $this->getCurrentWorkspace($user);
-            if ($workspace && class_exists('\App\Models\WorkspaceMember')) {
-                return \App\Models\WorkspaceMember::where('workspace_id', $workspace->id)->count();
+            if (class_exists('\App\Models\WorkspaceMember')) {
+                return \App\Models\WorkspaceMember::where('workspace_id', $workspace->id)
+                    ->where('status', 'active')
+                    ->count();
             }
             
             return 0;
@@ -200,33 +206,39 @@ class DashboardController extends Controller
         }
     }
     
-    private function getActiveProjects($workspace)
+    private function getActiveProjects($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Project')) {
+            if (!class_exists('\App\Models\Project') || !$workspace) {
                 return 0;
             }
             
-            if (!$workspace) {
-                return 0;
+            $query = \App\Models\Project::where('workspace_id', $workspace->id)
+                ->where('status', 'active');
+            
+            // Client role sees projects from project_clients table
+            if ($role === 'client') {
+                $query->whereHas('clients', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+            // Other non-company roles see projects from project_members table
+            elseif ($role !== 'company') {
+                $query->whereHas('members', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
             }
             
-            return \App\Models\Project::where('workspace_id', $workspace->id)
-                ->where('status', 'active')
-                ->count();
+            return $query->count();
         } catch (\Exception $e) {
             return 0;
         }
     }
     
-    private function getCompletedTasks($workspace)
+    private function getCompletedTasks($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Task') || !class_exists('\App\Models\TaskStage')) {
-                return 0;
-            }
-            
-            if (!$workspace) {
+            if (!class_exists('\App\Models\Task') || !class_exists('\App\Models\TaskStage') || !$workspace) {
                 return 0;
             }
             
@@ -236,10 +248,29 @@ class DashboardController extends Controller
                       ->orWhere('name', 'like', '%completed%')
                       ->orWhere('name', 'like', '%finished%');
                 })->pluck('id');
-                
-            return \App\Models\Task::whereHas('project', function($q) use ($workspace) {
+            
+            $query = \App\Models\Task::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->whereIn('task_stage_id', $completedStages)->count();
+            })->whereIn('task_stage_id', $completedStages);
+            
+            // Non-company workspace roles only see their own tasks or tasks in their projects
+            if ($role === 'client') {
+                $query->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereHas('project.clients', function($pm) use ($user) {
+                          $pm->where('user_id', $user->id);
+                      });
+                });
+            } elseif ($role !== 'company') {
+                $query->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereHas('project.members', function($pm) use ($user) {
+                          $pm->where('user_id', $user->id);
+                      });
+                });
+            }
+            
+            return $query->count();
         } catch (\Exception $e) {
             return 0;
         }
@@ -247,64 +278,53 @@ class DashboardController extends Controller
     
 
     
-    private function getRevenue($user)
+    private function getRevenue($user, $workspace, $role)
     {
         try {
-            // Super admin sees all revenue
-            if ($user->type === 'superadmin') {
-                if (class_exists('\App\Models\PlanOrder')) {
-                    return \App\Models\PlanOrder::whereIn('status', ['approved', 'completed', 'paid'])
-                        ->sum('final_price') ?? 0;
-                }
+            if ($role !== 'company' || !$workspace) {
                 return 0;
             }
             
-            // Regular users see workspace invoice revenue
-            $workspace = $this->getCurrentWorkspace($user);
-            if ($workspace && class_exists('\App\Models\Invoice')) {
+            if (class_exists('\App\Models\Invoice')) {
                 return \App\Models\Invoice::whereHas('project', function($q) use ($workspace) {
                     $q->where('workspace_id', $workspace->id);
                 })->where('status', 'paid')
-                ->where('created_at', '>=', now()->subDays(30))
-                ->sum('total') ?? 0;
+                ->sum('total_amount') ?? 0;
             }
             
             return 0;
         } catch (\Exception $e) {
+            \Log::error('getRevenue error: ' . $e->getMessage());
             return 0;
         }
     }
     
-    private function getProjectStats($workspace)
+    private function getProjectStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Project')) {
+            if (!class_exists('\App\Models\Project') || !$workspace) {
                 return ['total' => 0, 'active' => 0, 'completed' => 0, 'overdue' => 0];
             }
             
-            if (!$workspace) {
-                $total = \App\Models\Project::count();
-                $active = \App\Models\Project::where('status', 'active')->count();
-                $completed = \App\Models\Project::where('status', 'completed')->count();
-                $overdue = \App\Models\Project::where('deadline', '<', now()->toDateString())
-                    ->whereNotIn('status', ['completed', 'cancelled'])
-                    ->count();
-                    
-                return [
-                    'total' => $total,
-                    'active' => $active,
-                    'completed' => $completed,
-                    'overdue' => $overdue
-                ];
+            $baseQuery = \App\Models\Project::where('workspace_id', $workspace->id);
+            
+            // Client role sees projects from project_clients table
+            if ($role === 'client') {
+                $baseQuery->whereHas('clients', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+            // Other non-company roles see projects from project_members table
+            elseif ($role !== 'company') {
+                $baseQuery->whereHas('members', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
             }
             
-            $total = \App\Models\Project::where('workspace_id', $workspace->id)->count();
-            $active = \App\Models\Project::where('workspace_id', $workspace->id)
-                ->where('status', 'active')->count();
-            $completed = \App\Models\Project::where('workspace_id', $workspace->id)
-                ->where('status', 'completed')->count();
-            $overdue = \App\Models\Project::where('workspace_id', $workspace->id)
-                ->where('deadline', '<', now()->toDateString())
+            $total = (clone $baseQuery)->count();
+            $active = (clone $baseQuery)->where('status', 'active')->count();
+            $completed = (clone $baseQuery)->where('status', 'completed')->count();
+            $overdue = (clone $baseQuery)->where('deadline', '<', now()->toDateString())
                 ->whereNotIn('status', ['completed', 'cancelled'])
                 ->count();
                 
@@ -319,37 +339,57 @@ class DashboardController extends Controller
         }
     }
     
-    private function getTaskStats($workspace)
+    private function getTaskStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Task')) {
+            if (!class_exists('\App\Models\Task') || !$workspace) {
                 return ['total' => 0, 'pending' => 0, 'inProgress' => 0, 'completed' => 0];
             }
             
-            if (!$workspace) {
-                $stages = \App\Models\TaskStage::withCount('tasks')->get();
-                $total = \App\Models\Task::count();
-                $pending = $stages->first() ? $stages->first()->tasks_count : 0;
-                $inProgress = $stages->skip(1)->first() ? $stages->skip(1)->first()->tasks_count : 0;
-                $completed = $stages->skip(2)->first() ? $stages->skip(2)->first()->tasks_count : 0;
-                
-                return [
-                    'total' => $total,
-                    'pending' => $pending,
-                    'inProgress' => $inProgress,
-                    'completed' => $completed
-                ];
+            $taskQuery = \App\Models\Task::whereHas('project', function($q) use ($workspace) {
+                $q->where('workspace_id', $workspace->id);
+            });
+            
+            // Non-company workspace roles only see their own tasks or tasks in their projects
+            if ($role === 'client') {
+                $taskQuery->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereHas('project.clients', function($pm) use ($user) {
+                          $pm->where('user_id', $user->id);
+                      });
+                });
+            } elseif ($role !== 'company') {
+                $taskQuery->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereHas('project.members', function($pm) use ($user) {
+                          $pm->where('user_id', $user->id);
+                      });
+                });
             }
             
-            $total = \App\Models\Task::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->count();
+            $total = (clone $taskQuery)->count();
             
-            $stages = \App\Models\TaskStage::withCount(['tasks' => function($q) use ($workspace) {
-                $q->whereHas('project', function($pq) use ($workspace) {
-                    $pq->where('workspace_id', $workspace->id);
-                });
-            }])->get();
+            $stages = \App\Models\TaskStage::where('workspace_id', $workspace->id)
+                ->withCount(['tasks' => function($q) use ($workspace, $user, $role) {
+                    $q->whereHas('project', function($pq) use ($workspace) {
+                        $pq->where('workspace_id', $workspace->id);
+                    });
+                    if ($role === 'client') {
+                        $q->where(function($tq) use ($user) {
+                            $tq->where('assigned_to', $user->id)
+                               ->orWhereHas('project.clients', function($pm) use ($user) {
+                                   $pm->where('user_id', $user->id);
+                               });
+                        });
+                    } elseif ($role !== 'company') {
+                        $q->where(function($tq) use ($user) {
+                            $tq->where('assigned_to', $user->id)
+                               ->orWhereHas('project.members', function($pm) use ($user) {
+                                   $pm->where('user_id', $user->id);
+                               });
+                        });
+                    }
+                }])->get();
             
             $pending = $stages->first() ? $stages->first()->tasks_count : 0;
             $inProgress = $stages->skip(1)->first() ? $stages->skip(1)->first()->tasks_count : 0;
@@ -366,75 +406,65 @@ class DashboardController extends Controller
         }
     }
     
-    private function getTaskStages($workspace)
+    private function getTaskStages($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\TaskStage')) {
+            if (!class_exists('\App\Models\TaskStage') || !$workspace) {
                 return [];
             }
             
-            if (!$workspace) {
-                $stages = \App\Models\TaskStage::withCount('tasks')->get();
-            } else {
-                $stages = \App\Models\TaskStage::withCount(['tasks' => function($q) use ($workspace) {
+            $stages = \App\Models\TaskStage::where('workspace_id', $workspace->id)
+                ->withCount(['tasks' => function($q) use ($workspace, $user, $role) {
                     $q->whereHas('project', function($pq) use ($workspace) {
                         $pq->where('workspace_id', $workspace->id);
                     });
+                    if ($role !== 'company') {
+                        $q->where('assigned_to', $user->id);
+                    }
                 }])->get();
-            }
             
-            // Group by name and sum counts
-            $grouped = $stages->groupBy('name')->map(function($group) {
+            return $stages->map(function($stage) {
                 return [
-                    'name' => $group->first()->name,
-                    'count' => $group->sum('tasks_count')
+                    'name' => $stage->name,
+                    'count' => $stage->tasks_count
                 ];
-            })->values()->toArray();
-            
-            return $grouped;
+            })->toArray();
         } catch (\Exception $e) {
             return [];
         }
     }
     
-    private function getTimesheetStats($workspace)
+    private function getTimesheetStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\TimesheetEntry') || !class_exists('\App\Models\Timesheet')) {
+            if (!class_exists('\App\Models\TimesheetEntry') || !class_exists('\App\Models\Timesheet') || !$workspace) {
                 return ['totalHours' => 0, 'thisWeek' => 0, 'pendingApprovals' => 0];
             }
             
-            if (!$workspace) {
-                $totalHours = \App\Models\TimesheetEntry::sum('hours') ?? 0;
-                $thisWeek = \App\Models\TimesheetEntry::whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()])
-                    ->sum('hours') ?? 0;
-                $pendingApprovals = \App\Models\Timesheet::where('status', 'submitted')->count();
-                
-                return [
-                    'totalHours' => (int)$totalHours,
-                    'thisWeek' => (int)$thisWeek,
-                    'pendingApprovals' => $pendingApprovals
-                ];
+            $entryQuery = \App\Models\TimesheetEntry::whereHas('timesheet.user', function($q) use ($workspace) {
+                $q->whereHas('workspaces', function($wq) use ($workspace) {
+                    $wq->where('workspace_id', $workspace->id);
+                });
+            });
+            
+            $timesheetQuery = \App\Models\Timesheet::whereHas('user', function($q) use ($workspace) {
+                $q->whereHas('workspaces', function($wq) use ($workspace) {
+                    $wq->where('workspace_id', $workspace->id);
+                });
+            });
+            
+            // Non-company workspace roles only see their own timesheet data
+            if ($role !== 'company') {
+                $entryQuery->whereHas('timesheet', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+                $timesheetQuery->where('user_id', $user->id);
             }
             
-            $totalHours = \App\Models\TimesheetEntry::whereHas('timesheet.user', function($q) use ($workspace) {
-                $q->whereHas('workspaces', function($wq) use ($workspace) {
-                    $wq->where('workspace_id', $workspace->id);
-                });
-            })->sum('hours') ?? 0;
-            
-            $thisWeek = \App\Models\TimesheetEntry::whereHas('timesheet.user', function($q) use ($workspace) {
-                $q->whereHas('workspaces', function($wq) use ($workspace) {
-                    $wq->where('workspace_id', $workspace->id);
-                });
-            })->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()])
-            ->sum('hours') ?? 0;
-            
-            $pendingApprovals = \App\Models\Timesheet::whereHas('user', function($q) use ($workspace) {
-                $q->whereHas('workspaces', function($wq) use ($workspace) {
-                    $wq->where('workspace_id', $workspace->id);
-                });
-            })->where('status', 'submitted')->count();
+            $totalHours = (clone $entryQuery)->sum('hours') ?? 0;
+            $thisWeek = (clone $entryQuery)->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()])
+                ->sum('hours') ?? 0;
+            $pendingApprovals = (clone $timesheetQuery)->where('status', 'submitted')->count();
             
             return [
                 'totalHours' => (int)$totalHours,
@@ -446,35 +476,41 @@ class DashboardController extends Controller
         }
     }
     
-    private function getBudgetStats($workspace)
+    private function getBudgetStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\ProjectBudget') || !class_exists('\App\Models\ProjectExpense')) {
+            if (!class_exists('\App\Models\ProjectBudget') || !class_exists('\App\Models\ProjectExpense') || !$workspace) {
                 return ['totalBudget' => 0, 'spent' => 0, 'remaining' => 0, 'utilization' => 0];
             }
             
-            if (!$workspace) {
-                $totalBudget = \App\Models\ProjectBudget::sum('total_budget') ?? 0;
-                $spent = \App\Models\ProjectExpense::where('status', 'approved')->sum('amount') ?? 0;
-                $remaining = $totalBudget - $spent;
-                $utilization = $totalBudget > 0 ? ($spent / $totalBudget) * 100 : 0;
-                
-                return [
-                    'totalBudget' => (int)$totalBudget,
-                    'spent' => (int)$spent,
-                    'remaining' => (int)$remaining,
-                    'utilization' => round($utilization, 1)
-                ];
-            }
-            
-            $totalBudget = \App\Models\ProjectBudget::whereHas('project', function($q) use ($workspace) {
+            $budgetQuery = \App\Models\ProjectBudget::whereHas('project', function($q) use ($workspace, $user, $role) {
                 $q->where('workspace_id', $workspace->id);
-            })->sum('total_budget') ?? 0;
+                if ($role === 'client') {
+                    $q->whereHas('clients', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                } elseif ($role !== 'company') {
+                    $q->whereHas('members', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                }
+            });
             
-            $spent = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace) {
+            $expenseQuery = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace, $user, $role) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'approved')->sum('amount') ?? 0;
+                if ($role === 'client') {
+                    $q->whereHas('clients', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                } elseif ($role !== 'company') {
+                    $q->whereHas('members', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                }
+            })->where('status', 'approved');
             
+            $totalBudget = $budgetQuery->sum('total_budget') ?? 0;
+            $spent = $expenseQuery->sum('amount') ?? 0;
             $remaining = $totalBudget - $spent;
             $utilization = $totalBudget > 0 ? ($spent / $totalBudget) * 100 : 0;
             
@@ -489,44 +525,31 @@ class DashboardController extends Controller
         }
     }
     
-    private function getInvoiceStats($workspace)
+    private function getInvoiceStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Invoice')) {
+            if (!class_exists('\App\Models\Invoice') || !$workspace) {
                 return ['total' => 0, 'paid' => 0, 'pending' => 0, 'overdue' => 0];
             }
             
-            if (!$workspace) {
-                $total = \App\Models\Invoice::count();
-                $paid = \App\Models\Invoice::where('status', 'paid')->count();
-                $pending = \App\Models\Invoice::whereIn('status', ['draft', 'sent', 'viewed'])->count();
-                $overdue = \App\Models\Invoice::where('due_date', '<', now())
-                    ->where('status', '!=', 'paid')->count();
-                
-                return [
-                    'total' => $total,
-                    'paid' => $paid,
-                    'pending' => $pending,
-                    'overdue' => $overdue
-                ];
-            }
-            
-            $total = \App\Models\Invoice::whereHas('project', function($q) use ($workspace) {
+            $baseQuery = \App\Models\Invoice::whereHas('project', function($q) use ($workspace, $user, $role) {
                 $q->where('workspace_id', $workspace->id);
-            })->count();
+                if ($role === 'client') {
+                    $q->whereHas('clients', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                } elseif ($role !== 'company') {
+                    $q->whereHas('members', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                }
+            });
             
-            $paid = \App\Models\Invoice::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('status', 'paid')->count();
-            
-            $pending = \App\Models\Invoice::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->whereIn('status', ['draft', 'sent', 'viewed'])->count();
-            
-            $overdue = \App\Models\Invoice::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('due_date', '<', now())
-            ->where('status', '!=', 'paid')->count();
+            $total = (clone $baseQuery)->count();
+            $paid = (clone $baseQuery)->where('status', 'paid')->count();
+            $pending = (clone $baseQuery)->whereIn('status', ['draft', 'sent', 'viewed'])->count();
+            $overdue = (clone $baseQuery)->where('due_date', '<', now())
+                ->where('status', '!=', 'paid')->count();
             
             return [
                 'total' => $total,
@@ -539,21 +562,30 @@ class DashboardController extends Controller
         }
     }
     
-    private function getBugStats($workspace)
+    private function getBugStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\Bug') || !class_exists('\App\Models\BugStatus')) {
+            if (!class_exists('\App\Models\Bug') || !class_exists('\App\Models\BugStatus') || !$workspace) {
                 return [];
             }
             
-            if (!$workspace) {
-                $statuses = \App\Models\BugStatus::withCount('bugs')->take(6)->get();
-            } else {
-                $statuses = \App\Models\BugStatus::where('workspace_id', $workspace->id)
-                    ->withCount('bugs')
-                    ->take(6)
-                    ->get();
-            }
+            $statuses = \App\Models\BugStatus::where('workspace_id', $workspace->id)
+                ->withCount(['bugs' => function($q) use ($workspace, $user, $role) {
+                    $q->whereHas('project', function($pq) use ($workspace, $user, $role) {
+                        $pq->where('workspace_id', $workspace->id);
+                        if ($role === 'client') {
+                            $pq->whereHas('clients', function($m) use ($user) {
+                                $m->where('user_id', $user->id);
+                            });
+                        } elseif ($role !== 'company') {
+                            $pq->whereHas('members', function($m) use ($user) {
+                                $m->where('user_id', $user->id);
+                            });
+                        }
+                    });
+                }])
+                ->take(6)
+                ->get();
             
             return $statuses->map(function($status) {
                 return [
@@ -566,36 +598,29 @@ class DashboardController extends Controller
         }
     }
     
-    private function getExpenseStats($workspace)
+    private function getExpenseStats($workspace, $user, $role)
     {
         try {
-            if (!class_exists('\App\Models\ProjectExpense')) {
+            if (!class_exists('\App\Models\ProjectExpense') || !$workspace) {
                 return ['pending' => 0, 'approved' => 0, 'total' => 0];
             }
             
-            if (!$workspace) {
-                $total = \App\Models\ProjectExpense::count();
-                $pending = \App\Models\ProjectExpense::where('status', 'pending')->count();
-                $approved = \App\Models\ProjectExpense::where('status', 'approved')->count();
-                
-                return [
-                    'total' => $total,
-                    'pending' => $pending,
-                    'approved' => $approved
-                ];
-            }
-            
-            $total = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace) {
+            $baseQuery = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace, $user, $role) {
                 $q->where('workspace_id', $workspace->id);
-            })->count();
+                if ($role === 'client') {
+                    $q->whereHas('clients', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                } elseif ($role !== 'company') {
+                    $q->whereHas('members', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                }
+            });
             
-            $pending = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('status', 'pending')->count();
-            
-            $approved = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('status', 'approved')->count();
+            $total = (clone $baseQuery)->count();
+            $pending = (clone $baseQuery)->where('status', 'pending')->count();
+            $approved = (clone $baseQuery)->where('status', 'approved')->count();
             
             return [
                 'total' => $total,
@@ -607,28 +632,47 @@ class DashboardController extends Controller
         }
     }
     
-    private function getRecentActivities($workspace)
+    private function getRecentActivities($workspace, $user, $role)
     {
         try {
             if (!$workspace) {
                 return config('app.demo_mode', false) ? $this->getDefaultActivities() : [];
             }
             
-            $activities = \App\Models\ProjectActivity::whereHas('project', function($q) use ($workspace) {
+            $query = \App\Models\ProjectActivity::whereHas('project', function($q) use ($workspace, $user, $role) {
                 $q->where('workspace_id', $workspace->id);
-            })->with('user')
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(function($activity) {
-                return [
-                    'id' => $activity->id,
-                    'type' => $activity->type ?? 'activity',
-                    'description' => $activity->description,
-                    'user' => $activity->user->name ?? 'Unknown User',
-                    'time' => $activity->created_at->diffForHumans()
-                ];
+                // Non-company workspace roles only see activities from their projects
+                if ($role === 'client') {
+                    $q->whereHas('clients', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                } elseif ($role !== 'company') {
+                    $q->whereHas('members', function($m) use ($user) {
+                        $m->where('user_id', $user->id);
+                    });
+                }
             });
+            
+            // Non-company workspace roles only see their own activities
+            if ($role !== 'company') {
+                $query->where('user_id', $user->id);
+            }
+            
+            $activities = $query->with('user')
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(function($activity) {
+                    return [
+                        'id' => $activity->id,
+                        'type' => $activity->type ?? 'activity',
+                        'description' => $activity->description,
+                        'user' => $activity->user->name ?? 'Unknown User',
+                        'time' => $activity->created_at->diffForHumans(),
+                        'avatar' => check_file($activity->user->avatar) ? get_file($activity->user->avatar) : get_file('avatars/avatar.png'),
+
+                    ];
+                });
             
             // If no activities found, return default activities only in demo mode
             if ($activities->isEmpty()) {
@@ -740,17 +784,17 @@ class DashboardController extends Controller
                 'cards' => [
                     [
                         'title' => __('Total Companies'),
-                        'value' => $totalCompanies,
+                        'value' => $companies['total'] ?? $totalCompanies,
                         'icon' => 'Building2',
                     ],
                     [
                         'title' => __('Total Plans'),
-                        'value' => $totalPlans,
+                        'value' => $plans['total'] ?? $totalPlans,
                         'icon' => 'Package',
                     ],
                     [
                         'title' => __('Total Orders'),
-                        'value' => $totalOrders,
+                        'value' => $planOrders['total'] ?? $totalOrders,
                         'icon' => 'ShoppingCart',
                     ],
                     [
@@ -768,7 +812,8 @@ class DashboardController extends Controller
                 'revenue' => $revenue,
                 'mostBoughtPlan' => $mostBoughtPlan,
                 'mostUsedCoupon' => $mostUsedCoupon,
-                'recentActivities' => $recentActivities
+                'recentActivities' => $recentActivities,
+                'recentCompanies' => $this->getRecentCompanies()
             ];
 
             return Inertia::render('dashboard', [
@@ -862,7 +907,7 @@ class DashboardController extends Controller
         try {
             if (class_exists('\App\Models\Plan')) {
                 $total = \App\Models\Plan::count();
-                $active = \App\Models\Plan::where('is_active', true)->count();
+                $active = \App\Models\Plan::where('is_plan_enable', 'on')->count();
                 $inactive = $total - $active;
                 
                 return [
@@ -926,11 +971,7 @@ class DashboardController extends Controller
         try {
             if (class_exists('\App\Models\Coupon')) {
                 $total = \App\Models\Coupon::count();
-                $active = \App\Models\Coupon::where('is_active', true)
-                    ->where(function($q) {
-                        $q->whereNull('expires_at')
-                          ->orWhere('expires_at', '>', now());
-                    })->count();
+                $active = \App\Models\Coupon::where('status', true)->count();
                 $expired = $total - $active;
                 
                 return [
@@ -983,6 +1024,7 @@ class DashboardController extends Controller
                         'type' => 'plan_order',
                         'description' => "Plan order for {$order->plan->name}",
                         'user' => $order->user->name,
+                        'avatar' => check_file($order->user->avatar) ? get_file($order->user->avatar) : get_file('avatars/avatar.png'),
                         'time' => $order->created_at->diffForHumans(),
                         'status' => $order->status
                     ]);
@@ -998,6 +1040,7 @@ class DashboardController extends Controller
                         'type' => 'plan_request',
                         'description' => "Plan request for {$request->plan->name}",
                         'user' => $request->user->name,
+                        'avatar' => check_file($request->user->avatar) ? get_file($request->user->avatar) : get_file('avatars/avatar.png'),
                         'time' => $request->created_at->diffForHumans(),
                         'status' => $request->status
                     ]);
@@ -1012,6 +1055,7 @@ class DashboardController extends Controller
                     'type' => 'company_registration',
                     'description' => "New company registered",
                     'user' => $user->name,
+                    'avatar' => check_file($user->avatar) ? get_file($user->avatar) : get_file('avatars/avatar.png'),
                     'time' => $user->created_at->diffForHumans(),
                     'status' => 'active'
                 ]);
@@ -1067,6 +1111,39 @@ class DashboardController extends Controller
             ] : null;
         } catch (\Exception $e) {
             return null;
+        }
+    }
+    
+    private function getRecentCompanies()
+    {
+        try {
+            $companies = \App\Models\User::where('type', 'company')
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(function($company) {
+                    $plan = null;
+                    if (class_exists('\App\Models\PlanOrder')) {
+                        $latestOrder = \App\Models\PlanOrder::where('user_id', $company->id)
+                            ->where('status', 'approved')
+                            ->with('plan')
+                            ->latest()
+                            ->first();
+                        $plan = $latestOrder ? $latestOrder->plan->name : null;
+                    }
+                    
+                    return [
+                        'id' => $company->id,
+                        'name' => $company->name,
+                        'email' => $company->email,
+                        'plan' => $plan,
+                        'registered_at' => $company->created_at->diffForHumans()
+                    ];
+                });
+            
+            return $companies->toArray();
+        } catch (\Exception $e) {
+            return [];
         }
     }
 }

@@ -111,4 +111,57 @@ class PaystackPaymentController extends Controller
             return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
         }
     }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'payment_id' => 'required|string',
+                'amount' => 'required|numeric|min:0.01',
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+
+            
+            if (!isset($settings['is_paystack_enabled']) || $settings['is_paystack_enabled'] !== '1') {
+                return back()->withErrors(['error' => 'Paystack not enabled']);
+            }
+
+            // Verify payment with Paystack API
+            $curl = curl_init();
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => "https://api.paystack.co/transaction/verify/" . $request->payment_id,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    "Authorization: Bearer " . $settings['paystack_secret_key'],
+                    "Cache-Control: no-cache",
+                ],
+            ));
+
+            $response = curl_exec($curl);
+            curl_close($curl);
+
+            $result = json_decode($response, true);
+
+            if ($result['status'] && $result['data']['status'] === 'success') {
+                $invoice->createPaymentRecord(
+                    $request->amount,
+                    'paystack',
+                    $request->payment_id
+                );
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+
+            return back()->withErrors(['error' => 'Payment verification failed']);
+            
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
+        }
+    }
 }

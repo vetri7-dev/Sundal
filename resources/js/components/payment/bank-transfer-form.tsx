@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { router } from '@inertiajs/react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { router, usePage } from '@inertiajs/react';
 import { toast } from '@/components/custom-toast';
-import { Copy, CheckCircle } from 'lucide-react';
+import { Copy, CheckCircle, Upload, FileText, X } from 'lucide-react';
 
 interface BankTransferFormProps {
   planId: number;
@@ -27,31 +29,51 @@ export function BankTransferForm({
 }: BankTransferFormProps) {
   const { t } = useTranslation();
   const [processing, setProcessing] = useState(false);
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { storageSettings } = usePage().props as any;
+    
+  const allowedTypes = storageSettings?.allowed_file_types || 'jpg,png,webp,gif';
+  const acceptAttribute = allowedTypes
+      .split(',')
+      .map((type) => `.${type.trim()}`)
+      .join(',');
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t('Copied to clipboard'));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setReceipt(e.target.files?.[0] ?? null);
+  };
+
   const handleConfirmPayment = () => {
+        if (!receipt) {
+        toast.error(t('Please upload your bank transfer receipt'));
+        return;
+    }
     setProcessing(true);
     
-    router.post(route('bank.payment'), {
-      plan_id: planId,
-      billing_cycle: billingCycle,
-      coupon_code: couponCode,
-      amount: planPrice,
-    }, {
+    const formData = new FormData();
+    formData.append('plan_id', String(planId));
+    formData.append('billing_cycle', billingCycle);
+    formData.append('coupon_code', couponCode);
+    formData.append('amount', String(planPrice));
+    if (receipt) formData.append('receipt', receipt);
+
+    router.post(route('bank.payment'), formData, {
+      forceFormData: true,
       onSuccess: () => {
         toast.success(t('Payment request submitted successfully'));
         onSuccess();
       },
       onError: () => {
         toast.error(t('Failed to submit payment request'));
-      },
-      onFinish: () => {
         setProcessing(false);
-      }
+      },
+      onFinish: () => { setProcessing(false); }
     });
   };
 
@@ -93,6 +115,43 @@ export function BankTransferForm({
           </div>
         </CardContent>
       </Card>
+
+      {/* Receipt Upload */}
+      <div className="space-y-2">
+          <Label htmlFor="bank-plan-receipt">{t('Bank Transfer Receipt')} <span className="text-red-500">*</span></Label>
+          <Input
+              id="bank-plan-receipt"
+              ref={fileInputRef}
+              type="file"
+              accept={acceptAttribute}
+              onChange={handleFileChange}
+              className="hidden"
+          />
+          {!receipt ? (
+              <label
+                  htmlFor="bank-plan-receipt"
+                  className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+              >
+                  <Upload className="h-5 w-5 text-gray-400 mb-1" />
+                  <span className="text-xs text-gray-500">{t('Click to upload receipt')}</span>
+                  <span className="text-xs text-gray-400">{t('JPG, PNG, PDF up to 5MB')}</span>
+              </label>
+          ) : (
+              <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className="text-sm text-gray-700 truncate">{receipt.name}</span>
+                  </div>
+                  <button
+                      type="button"
+                      onClick={() => { setReceipt(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      className="p-1 hover:bg-gray-200 rounded flex-shrink-0"
+                  >
+                      <X className="h-4 w-4 text-gray-500" />
+                  </button>
+              </div>
+          )}
+      </div>
 
       <div className="flex gap-3">
         <Button variant="outline" onClick={onCancel} className="flex-1">

@@ -6,6 +6,7 @@ import { Building2, Check, LogOut } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import { hasPermission } from '@/utils/permissions';
 import { LeaveWorkspaceModal } from '@/components/LeaveWorkspaceModal';
+import { toast } from '@/components/custom-toast';
 
 export const WorkspaceSwitcher: React.FC = () => {
     const { auth } = usePage().props as any;
@@ -47,7 +48,22 @@ export const WorkspaceSwitcher: React.FC = () => {
                     >
                         <div 
                             className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
-                            onClick={() => router.post(route('workspaces.switch', workspace.id))}
+                            onClick={() => router.post(route('workspaces.switch', workspace.id), {}, {
+                                onSuccess: (page) => {
+                                            const flash = (page.props as any).flash;
+                                            if (flash?.error) {
+                                                toast.error(flash.error);
+                                                return;
+                                            }
+                                    const newGlobalSettings = (page.props as any).globalSettings;
+                                    const newWorkspaceId = (page.props as any).auth?.user?.current_workspace_id;
+                                    // Update window.page so use-appearance reads correct settings
+                                    (window as any).page = page;
+                                    window.dispatchEvent(new CustomEvent('workspaceSwitched', {
+                                        detail: { globalSettings: newGlobalSettings, workspaceId: newWorkspaceId }
+                                    }));
+                                }
+                            })}
                         >
                             <Building2 className="h-4 w-4 flex-shrink-0" />
                             <div className="min-w-0 flex-1">

@@ -8,7 +8,10 @@
         Deny from all
     </Files>
 
+    DirectoryIndex index.php
+
     RewriteEngine On
+    RewriteBase /sundal/
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
@@ -20,7 +23,7 @@
     RewriteRule ^ %1 [L,R=301]
 
     # Handle Front Controller...
-    RewriteCond %{REQUEST_URI} !(\.css|\.js|\.png|\.jpg|\.jpeg|\.gif|\.pdf|\.doc|\.docx|\.xls|\.xlsx|\.ppt|\.pptx|\.zip|\.rar|\.7z|\.txt|\.rtf|robots\.txt|\.ico|\.woff|\.woff2|.ttf|\.svg)$ [NC]
+    RewriteCond %{REQUEST_URI} !(\.css|\.js|\.png|\.jpg|\.jpeg|\.gif|\.pdf|\.doc|\.docx|\.xls|\.xlsx|\.ppt|\.pptx|\.zip|\.rar|\.7z|\.txt|\.rtf|robots\.txt|\.ico|\.woff|\.woff2|\.ttf|\.svg)$ [NC]
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]

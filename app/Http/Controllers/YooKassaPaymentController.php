@@ -152,4 +152,233 @@ class YooKassaPaymentController extends Controller
             return response()->json(['error' => __('Callback processing failed')], 500);
         }
     }
+
+    public function createInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_id' => 'required|exists:invoices,id',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::findOrFail($request->invoice_id);
+            $settings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['yookassa_shop_id']) || !isset($settings['is_yookassa_enabled']) || $settings['is_yookassa_enabled'] !== '1') {
+                return response()->json(['error' => __('YooKassa not configured')], 400);
+            }
+
+            $client = new Client();
+            $client->setAuth((int)$settings['yookassa_shop_id'], $settings['yookassa_secret_key']);
+
+            $orderId = 'invoice_' . $invoice->id . '_' . time();
+
+            $payment = $client->createPayment([
+                'amount' => [
+                    'value' => number_format($request->amount, 2, '.', ''),
+                    'currency' => 'RUB',
+                ],
+                'confirmation' => [
+                    'type' => 'redirect',
+                    'return_url' => route('yookassa.invoice.success', [
+                        'invoice_id' => $invoice->id,
+                        'amount' => $request->amount
+                    ]),
+                ],
+                'capture' => true,
+                'description' => 'Invoice Payment - ' . $invoice->invoice_number,
+                'metadata' => [
+                    'invoice_id' => $invoice->id,
+                    'order_id' => $orderId,
+                    'amount' => $request->amount
+                ]
+            ], uniqid('', true));
+
+            if ($payment['confirmation']['confirmation_url'] != null) {
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $payment['confirmation']['confirmation_url'],
+                    'payment_id' => $payment['id']
+                ]);
+            }
+
+            return response()->json(['error' => __('Payment creation failed')], 500);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => __('Payment creation failed')], 500);
+        }
+    }
+
+    public function processInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01',
+                'payment_id' => 'required|string',
+            ]);
+            
+            $invoice = \App\Models\Invoice::where('payment_token', $request->route('token'))->firstOrFail();
+            $settings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_yookassa_enabled']) || $settings['is_yookassa_enabled'] !== '1') {
+                return back()->withErrors(['error' => 'YooKassa not enabled']);
+            }
+
+            $invoice->createPaymentRecord(
+                $request->amount,
+                'yookassa',
+                $request->payment_id
+            );
+            
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('success', 'YooKassa payment processed successfully.');
+            
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
+        }
+    }
+
+    public function invoiceSuccess(Request $request)
+    {
+        try {
+            $invoiceId = $request->input('invoice_id');
+            $amount = $request->input('amount');
+            
+            if ($invoiceId && $amount) {
+                $invoice = \App\Models\Invoice::find($invoiceId);
+                
+                if ($invoice) {
+                    $invoice->createPaymentRecord(
+                        $amount,
+                        'yookassa',
+                        'yookassa_' . time()
+                    );
+                    
+                    return redirect()->route('invoices.show', $invoice->id)
+                        ->with('success', 'Payment completed successfully!`');
+                }
+            }
+            
+            return redirect()->route('invoices.show', $invoiceId ?: 1)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.show', $request->input('invoice_id') ?: 1)
+                ->with('error', 'Payment processing failed');
+        }
+    }
+
+    public function invoiceCallback(Request $request)
+    {
+        try {
+            $paymentId = $request->input('object.id');
+            $status = $request->input('object.status');
+            $metadata = $request->input('object.metadata');
+
+            if ($paymentId && $status === 'succeeded' && $metadata) {
+                $invoiceId = $metadata['invoice_id'];
+                $amount = $metadata['amount'];
+
+                $invoice = \App\Models\Invoice::find($invoiceId);
+
+                if ($invoice) {
+                    $invoice->createPaymentRecord($amount, 'yookassa', $paymentId);
+                }
+            }
+
+            return response('OK', 200);
+        } catch (\Exception $e) {
+            return response('ERROR', 500);
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+            
+            $paymentSettings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['yookassa_shop_id', 'yookassa_secret_key', 'is_yookassa_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (($paymentSettings['is_yookassa_enabled'] ?? '0') !== '1') {
+                return response()->json(['error' => 'YooKassa payment method is not enabled'], 400);
+            }
+
+            if (empty($paymentSettings['yookassa_shop_id']) || empty($paymentSettings['yookassa_secret_key'])) {
+                return response()->json(['error' => 'YooKassa credentials not configured'], 400);
+            }
+
+            $client = new Client();
+            $client->setAuth((int)$paymentSettings['yookassa_shop_id'], $paymentSettings['yookassa_secret_key']);
+
+            $orderId = 'invoice_' . $invoice->id . '_' . time();
+
+            $payment = $client->createPayment([
+                'amount' => [
+                    'value' => number_format($request->amount, 2, '.', ''),
+                    'currency' => 'RUB',
+                ],
+                'confirmation' => [
+                    'type' => 'redirect',
+                    'return_url' => route('yookassa.invoice.success.link', $token) . '?order_id=' . $orderId . '&amount=' . $request->amount,
+                ],
+                'capture' => true,
+                'description' => 'Invoice Payment - ' . $invoice->invoice_number,
+                'metadata' => [
+                    'invoice_id' => $invoice->id,
+                    'invoice_token' => $token,
+                    'order_id' => $orderId,
+                    'amount' => $request->amount
+                ]
+            ], uniqid('', true));
+
+            if ($payment['confirmation']['confirmation_url'] != null) {
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $payment['confirmation']['confirmation_url'],
+                    'payment_id' => $payment['id']
+                ]);
+            }
+
+            return response()->json(['error' => 'Payment creation failed'], 500);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $orderId = $request->input('order_id');
+            $amount = $request->input('amount');
+            
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+
+            if ($orderId && $amount) {
+                $invoice->createPaymentRecord(
+                    (float)$amount,
+                    'yookassa',
+                    $orderId
+                );
+
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
+        }
+    }
 }

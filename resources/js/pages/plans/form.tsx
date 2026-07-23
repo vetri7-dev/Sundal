@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 
 interface Plan {
@@ -43,8 +44,9 @@ interface Props {
 export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPlanExists = false }: Props) {
   const { t } = useTranslation();
   const [processing, setProcessing] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const isEdit = !!plan;
-  
+
   const [formData, setFormData] = useState({
     name: plan?.name || '',
     price: plan?.price || 0,
@@ -83,20 +85,36 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
 
     if (isEdit) {
       router.put(route('plans.update', plan.id), formData, {
-        onFinish: () => setProcessing(false)
+        onFinish: () => setProcessing(false),
+        onError: (errors) => {
+          setProcessing(false);
+          setErrors(errors);
+        }
       });
     } else {
       router.post(route('plans.store'), formData, {
-        onFinish: () => setProcessing(false)
+        onFinish: () => setProcessing(false),
+        onError: (errors) => {
+          setProcessing(false);
+          setErrors(errors);
+        }
       });
     }
   };
 
   return (
-    <PageTemplate 
+    <PageTemplate
       title={t(isEdit ? "Edit Plan" : "Create Plan")}
       description={t(isEdit ? "Update subscription plan details" : "Add a new subscription plan")}
       url={isEdit ? route('plans.update', plan.id) : "/plans/create"}
+      actions={[
+        {
+          label: t('Back'),
+          icon: <ArrowLeft className="h-4 w-4" />,
+          variant: 'outline',
+          onClick: () => router.get(route('plans.index')),
+        }
+      ]}
       breadcrumbs={[
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Plans'), href: route('plans.index') },
@@ -108,27 +126,31 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">{t("Plan Name")}</Label>
+                <Label htmlFor="name">{t("Plan Name")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="name"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  required
+                  placeholder={t("e.g. Basic, Pro, Enterprise")}
+                  className={errors.name ? 'border-red-500' : ''}
                 />
+                {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name}</p>}
               </div>
 
               <div>
-                <Label htmlFor="price">{t("Monthly Price")}</Label>
+                <Label htmlFor="price">{t("Monthly Price")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="price"
                   name="price"
                   type="number"
                   step="0.01"
+                  placeholder='e.g. 99'
                   value={formData.price}
                   onChange={handleChange}
-                  required
+                  className={errors.price ? 'border-red-500' : ''}
                 />
+                {errors.price && <p className="text-sm text-red-600 mt-1">{errors.price}</p>}
               </div>
 
               <div>
@@ -153,6 +175,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                   id="trial_day"
                   name="trial_day"
                   type="number"
+                  placeholder='e.g. 14'
                   value={formData.trial_day}
                   onChange={handleChange}
                 />
@@ -166,90 +189,103 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}
+                  placeholder={t("Enter plan description...")}
                 />
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <Label htmlFor="max_users_per_workspace">{t("Maximum Users Per Workspace")}</Label>
+                <Label htmlFor="max_users_per_workspace">{t("Maximum Users Per Workspace")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="max_users_per_workspace"
                   name="max_users_per_workspace"
                   type="number"
+                  placeholder='e.g. 10'
                   value={formData.max_users_per_workspace}
                   onChange={handleChange}
-                  required
+                  className={errors.max_users_per_workspace ? 'border-red-500' : ''}
                 />
+                {errors.max_users_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_users_per_workspace}</p>}
               </div>
 
               <div>
-                <Label htmlFor="max_clients_per_workspace">{t("Maximum Clients Per Workspace")}</Label>
+                <Label htmlFor="max_clients_per_workspace">{t("Maximum Clients Per Workspace")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="max_clients_per_workspace"
                   name="max_clients_per_workspace"
                   type="number"
+                  placeholder='e.g. 5'
                   value={formData.max_clients_per_workspace}
                   onChange={handleChange}
-                  required
+                  className={errors.max_clients_per_workspace ? 'border-red-500' : ''}
                 />
+                {errors.max_clients_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_clients_per_workspace}</p>}
               </div>
 
               <div>
-                <Label htmlFor="max_managers_per_workspace">{t("Maximum Managers Per Workspace")}</Label>
+                <Label htmlFor="max_managers_per_workspace">{t("Maximum Managers Per Workspace")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="max_managers_per_workspace"
                   name="max_managers_per_workspace"
                   type="number"
+                  placeholder='e.g. 2'
                   value={formData.max_managers_per_workspace}
                   onChange={handleChange}
-                  required
+                  className={errors.max_managers_per_workspace ? 'border-red-500' : ''}
                 />
+                {errors.max_managers_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_managers_per_workspace}</p>}
               </div>
 
               <div>
-                <Label htmlFor="max_projects_per_workspace">{t("Maximum Projects Per Workspace")}</Label>
+                <Label htmlFor="max_projects_per_workspace">{t("Maximum Projects Per Workspace")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="max_projects_per_workspace"
                   name="max_projects_per_workspace"
                   type="number"
+                  placeholder='e.g. 10'
                   value={formData.max_projects_per_workspace}
                   onChange={handleChange}
-                  required
+                  className={errors.max_projects_per_workspace ? 'border-red-500' : ''}
                 />
+                {errors.max_projects_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_projects_per_workspace}</p>}
               </div>
 
               <div>
-                <Label htmlFor="workspace_limit">{t("Workspace Limit")}</Label>
+                <Label htmlFor="workspace_limit">{t("Workspace Limit")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="workspace_limit"
                   name="workspace_limit"
                   type="number"
                   min="1"
+                  placeholder='e.g. 1'
                   value={formData.workspace_limit}
                   onChange={handleChange}
-                  required
+                  className={errors.workspace_limit ? 'border-red-500' : ''}
                 />
+                {errors.workspace_limit && <p className="text-sm text-red-600 mt-1">{errors.workspace_limit}</p>}
               </div>
 
               <div>
-                <Label htmlFor="storage_limit">{t("Storage Limit (GB)")}</Label>
+                <Label htmlFor="storage_limit">{t("Storage Limit (GB)")} <span className="text-red-500">*</span></Label>
                 <Input
                   id="storage_limit"
                   name="storage_limit"
                   type="number"
                   step="0.01"
+                  placeholder='e.g. 10'
                   value={formData.storage_limit}
                   onChange={handleChange}
-                  required
+                  className={errors.storage_limit ? 'border-red-500' : ''}
                 />
+                {errors.storage_limit && <p className="text-sm text-red-600 mt-1">{errors.storage_limit}</p>}
               </div>
             </div>
           </div>
 
           <div className="border rounded-lg p-4 space-y-4">
             <h3 className="font-medium">{t("Features")}</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="enable_chatgpt">{t("AI Integration")}</Label>
@@ -259,7 +295,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                   onCheckedChange={(checked) => handleSwitchChange('enable_chatgpt', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="is_trial">{t("Enable Trial")}</Label>
                 <Switch
@@ -273,7 +309,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
 
           <div className="border rounded-lg p-4 space-y-4">
             <h3 className="font-medium">{t("Settings")}</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="is_plan_enable">{t("Active")}</Label>
@@ -283,7 +319,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                   onCheckedChange={(checked) => handleSwitchChange('is_plan_enable', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="is_default">{t("Default Plan")}</Label>
@@ -303,18 +339,17 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
           </div>
 
           <div className="flex justify-end gap-3">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => router.get(route('plans.index'))}
             >
               {t("Cancel")}
             </Button>
-            <Button 
-              type="submit" 
-              disabled={processing}
+            <Button
+              type="submit"
             >
-              {processing ? t(isEdit ? "Updating..." : "Creating...") : t(isEdit ? "Update Plan" : "Create Plan")}
+              {t(isEdit ? "Update" : "Create")}
             </Button>
           </div>
         </form>

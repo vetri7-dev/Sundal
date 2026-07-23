@@ -59,6 +59,30 @@ class ReferralController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
+        // Get all referred users for superadmin with pagination
+        $referredUsers = User::whereNotNull('used_referral_code')
+            ->with(['plan', 'referrals', 'planOrders' => function ($query) {
+                $query->where('status', 'approved')->orderBy('created_at', 'desc')->limit(1);
+            }])
+            ->where('used_referral_code', '!=', 0)
+            ->orderBy('created_at', 'desc')
+            ->paginate(5)
+            ->withQueryString()
+            ->through(function ($u) {
+                $u->avatar = check_file($u->avatar) ? get_file($u->avatar) : get_file('avatars/avatar.png');
+                return $u;
+            });
+
+        // Get currency symbol
+        $superAdmin = User::where('type', 'superadmin')->first();
+        $superAdminSettings = settings($superAdmin->id);
+        $currency = $superAdminSettings ? ($superAdminSettings['defaultCurrency'] ?? 'USD') : 'USD';
+        $currencySymbol = '$';
+        if (!empty($currency)) {
+            $currencyData = \App\Models\Currency::where('code', $currency)->first();
+            $currencySymbol = $currencyData ? $currencyData->symbol : '$';
+        }
+
         return Inertia::render('referral/index', [
             'userType' => 'superadmin',
             'settings' => $settings,
@@ -71,6 +95,9 @@ class ReferralController extends Controller
                 'topCompanies' => $topCompanies,
             ],
             'payoutRequests' => $payoutRequests,
+            'referredUsers' => $referredUsers,
+            'currency' => $currency,
+            'currencySymbol' => $currencySymbol
         ]);
     }
 
@@ -90,6 +117,41 @@ class ReferralController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
+        // Get referred users count (users who used this company's referral code)
+        $referredUsersCount = User::where('used_referral_code', $user->referral_code)->count();
+        
+        // Get recent referred users
+        $recentReferredUsers = User::where('used_referral_code', $user->referral_code)
+            ->with(['plan', 'planOrders' => function ($query) {
+                $query->where('status', 'approved')->orderBy('created_at', 'desc')->limit(1);
+            }])
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($referredUser) {
+                return [
+                    'id' => $referredUser->id,
+                    'name' => $referredUser->name,
+                    'email' => $referredUser->email,
+                    'avatar' => check_file($referredUser->avatar) ? get_file($referredUser->avatar) : get_file('avatars/avatar.png'),
+                    'plan' => $referredUser->plan,
+                    'plan_orders' => $referredUser->planOrders,
+                ];
+            });
+
+        // Get all referred users for the company with pagination
+        $referredUsers = User::where('used_referral_code', $user->referral_code)
+            ->with(['plan', 'referrals', 'planOrders' => function ($query) {
+                $query->where('status', 'approved')->orderBy('created_at', 'desc')->limit(1);
+            }])
+            ->orderBy('created_at', 'desc')
+            ->paginate(5)
+            ->withQueryString()
+            ->through(function ($u) {
+                $u->avatar = check_file($u->avatar) ? get_file($u->avatar) : get_file('avatars/avatar.png');
+                return $u;
+            });
+
         // Generate referral code if not exists
         if (!$user->referral_code) {
             $user->referral_code = 'REF' . str_pad($user->id, 6, '0', STR_PAD_LEFT);
@@ -97,6 +159,16 @@ class ReferralController extends Controller
         }
         
         $referralLink = url('/register?ref=' . $user->referral_code);
+
+        // Get currency symbol
+        $superAdmin = User::where('type', 'superadmin')->first();
+        $superAdminSettings = settings($superAdmin->id);
+        $currency = $superAdminSettings ? ($superAdminSettings['defaultCurrency'] ?? 'USD') : 'USD';
+        $currencySymbol = '$';
+        if (!empty($currency)) {
+            $currencyData = \App\Models\Currency::where('code', $currency)->first();
+            $currencySymbol = $currencyData ? $currencyData->symbol : '$';
+        }
 
         return Inertia::render('referral/index', [
             'userType' => 'company',
@@ -106,9 +178,14 @@ class ReferralController extends Controller
                 'totalEarned' => $totalEarned,
                 'totalPayoutRequests' => $totalPayoutRequests,
                 'availableBalance' => $availableBalance,
+                'referredUsersCount' => $referredUsersCount,
             ],
             'payoutRequests' => $payoutRequests,
             'referralLink' => $referralLink,
+            'recentReferredUsers' => $recentReferredUsers,
+            'referredUsers' => $referredUsers,
+            'currency' => $currency,
+            'currencySymbol' => $currencySymbol
         ]);
     }
 
@@ -172,5 +249,104 @@ class ReferralController extends Controller
             'notes' => $request->notes,
         ]);
         return back()->with('success', __('Payout request rejected'));
+    }
+
+    public function getReferredUsers(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Get currency symbol
+        $superAdmin = User::where('type', 'superadmin')->first();
+        $superAdminSettings = settings($superAdmin->id);
+        $currency = $superAdminSettings ? ($superAdminSettings['defaultCurrency'] ?? 'USD') : 'USD';
+        $currencySymbol = '$';
+        if (!empty($currency)) {
+            $currencyData = \App\Models\Currency::where('code', $currency)->first();
+            $currencySymbol = $currencyData ? $currencyData->symbol : '$';
+        }
+        
+        if ($user->isSuperAdmin()) {
+            // Super admin can see all referred users
+            $referredUsers = User::whereNotNull('used_referral_code')
+                ->with(['plan', 'referrals', 'planOrders' => function ($query) {
+                    $query->where('status', 'approved')->orderBy('created_at', 'desc')->limit(1);
+                }])
+                ->orderBy('created_at', 'desc')
+                ->paginate(15)
+                ->withQueryString();
+        } else {
+            // Company can see users who used their referral code
+            $referredUsers = User::where('used_referral_code', $user->referral_code)
+                ->with(['plan', 'referrals', 'planOrders' => function ($query) {
+                    $query->where('status', 'approved')->orderBy('created_at', 'desc')->limit(1);
+                }])
+                ->orderBy('created_at', 'desc')
+                ->paginate(15)
+                ->withQueryString();
+        }
+        
+        return Inertia::render('referral/referred-users', [
+            'referredUsers' => $referredUsers,
+            'userType' => $user->isSuperAdmin() ? 'superadmin' : 'company',
+            'currency' => $currency,
+            'currencySymbol' => $currencySymbol
+        ]);
+    }
+
+    /**
+     * Create referral record when user purchases a plan
+     */
+    public static function createReferralRecord(User $user, $billingCycle = null)
+    {
+        $settings = ReferralSetting::current();
+        
+        if (!$settings->is_enabled || !$user->used_referral_code || !$user->plan) {
+            return;
+        }
+        
+        // Check if referral record already exists
+        $existingReferral = Referral::where('user_id', $user->id)
+            ->where('plan_id', $user->plan_id)
+            ->first();
+            
+        if ($existingReferral) {
+            return; // Already created
+        }
+        
+        $referrer = User::where('referral_code', $user->used_referral_code)
+            ->where('type', 'company')
+            ->first();
+            
+        if (!$referrer) {
+            return;
+        }
+        
+        // Get the actual paid amount from the most recent plan order
+        $planOrder = \App\Models\PlanOrder::where('user_id', $user->id)
+            ->where('plan_id', $user->plan_id)
+            ->where('status', 'approved')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        // Use the actual paid amount if available, otherwise use plan price based on billing cycle
+        if ($planOrder && $planOrder->final_price > 0) {
+            $planPrice = $planOrder->final_price;
+        } elseif ($planOrder && $planOrder->billing_cycle === 'yearly' && $user->plan->yearly_price) {
+            $planPrice = $user->plan->yearly_price;
+        } else {
+            $planPrice = $user->plan->price ?? 0;
+        }
+        
+        $commissionAmount = ($planPrice * $settings->commission_percentage) / 100;
+        
+        if ($commissionAmount > 0) {
+            Referral::create([
+                'user_id' => $user->id,
+                'company_id' => $referrer->id,
+                'commission_percentage' => $settings->commission_percentage,
+                'amount' => $commissionAmount,
+                'plan_id' => $user->plan_id,
+            ]);
+        }
     }
 }

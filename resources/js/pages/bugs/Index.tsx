@@ -3,18 +3,18 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { toast } from '@/components/custom-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Bug, Filter, Search, LayoutGrid, List, AlertTriangle, Zap, Eye, Edit, Trash2, Columns3, User, GripVertical, MessageSquare, Paperclip, Copy } from 'lucide-react';
+import { Plus, Bug, Filter, Search, LayoutGrid, List, AlertTriangle, Zap, Eye, Edit, Trash2, Columns3, User, GripVertical, MessageSquare, Paperclip, Copy, Columns, CheckCircle2, Flame } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { BugModal } from './BugModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { hasPermission } from '@/utils/authorization';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { CrudTable } from '@/components/CrudTable';
 import { useTranslation } from 'react-i18next';
 
 interface Bug {
@@ -35,7 +35,18 @@ interface Props {
     projects: Array<{ id: number; name: string }>;
     statuses: Array<{ id: number; name: string; color: string }>;
     members: Array<{ id: number; name: string }>;
-    filters: any;
+    filters: {
+        project_id?: string;
+        status_id?: string;
+        priority?: string;
+        severity?: string;
+        assigned_to?: string;
+        search?: string;
+        per_page?: number;
+        view?: string;
+        sort_field?: string;
+        sort_direction?: 'asc' | 'desc';
+    };
     userWorkspaceRole: string;
     project_name?: string;
     permissions?: any;
@@ -45,6 +56,11 @@ export default function Index({ bugs, projects, statuses, members, filters, user
     const { t } = useTranslation();
     const { flash, permissions: pagePermissions } = usePage().props as any;
     const bugPermissions = permissions || pagePermissions;
+    
+    const formatText = (text: string) => {
+        if (!text) return '';
+        return text.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+    };
 
     // State declarations first
     const [activeView, setActiveView] = useState(filters.view || 'kanban');
@@ -71,33 +87,40 @@ export default function Index({ bugs, projects, statuses, members, filters, user
 
     const bugsData = Array.isArray(bugs) ? bugs : bugs.data;
 
+    // Central param builder — reads per_page/sort from server `filters` prop (source of truth)
+    // stateOverrides lets us pass new values before setState updates the closure
+    const buildParams = (
+        overrides: Record<string, any> = {},
+        stateOverrides: { project?: string; status?: string; priority?: string; severity?: string; search?: string; view?: string } = {}
+    ) => {
+        const view     = stateOverrides.view     !== undefined ? stateOverrides.view     : activeView;
+        const search   = stateOverrides.search   !== undefined ? stateOverrides.search   : searchTerm;
+        const project  = stateOverrides.project  !== undefined ? stateOverrides.project  : selectedProject;
+        const status   = stateOverrides.status   !== undefined ? stateOverrides.status   : selectedStatus;
+        const priority = stateOverrides.priority !== undefined ? stateOverrides.priority : selectedPriority;
+        const severity = stateOverrides.severity !== undefined ? stateOverrides.severity : selectedSeverity;
+
+        const params: any = { page: 1, view };
+        if (search) params.search = search;
+        if (project !== 'all') params.project_id = project;
+        if (status !== 'all') params.status_id = status;
+        if (priority !== 'all') params.priority = priority;
+        if (severity !== 'all') params.severity = severity;
+        if (view !== 'kanban' && filters.per_page) params.per_page = filters.per_page;
+        if (filters.sort_field) params.sort_field = filters.sort_field;
+        if (filters.sort_direction) params.sort_direction = filters.sort_direction;
+        if (project_name) params.project_name = project_name;
+        return { ...params, ...overrides };
+    };
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        applyFilters();
+        router.get(route('bugs.index'), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
     };
-    
+
     const applyFilters = () => {
-        const params: any = { page: 1 };
-        
-        if (searchTerm) params.search = searchTerm;
-        if (selectedProject !== 'all') params.project_id = selectedProject;
-        if (selectedStatus !== 'all') params.status_id = selectedStatus;
-        if (selectedPriority !== 'all') params.priority = selectedPriority;
-        if (selectedSeverity !== 'all') params.severity = selectedSeverity;
-        // Only include per_page for non-kanban views
-        if (activeView !== 'kanban' && filters.per_page) params.per_page = filters.per_page;
-        params.view = activeView;
-        if (project_name) params.project_name = project_name;
-        
-        router.get(route('bugs.index'), params, { preserveState: false, preserveScroll: false });
+        router.get(route('bugs.index'), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
     };
-    
-    // Apply filters when view changes
-    useEffect(() => {
-        if (activeView !== (filters.view || 'kanban')) {
-            applyFilters();
-        }
-    }, [activeView]);
     
     const hasActiveFilters = () => {
         return selectedProject !== 'all' || selectedStatus !== 'all' || selectedPriority !== 'all' || selectedSeverity !== 'all' || searchTerm !== '';
@@ -123,20 +146,20 @@ export default function Index({ bugs, projects, statuses, members, filters, user
 
     const getPriorityColor = (priority: string) => {
         const colors = {
-            low: 'bg-blue-100 text-blue-800',
-            medium: 'bg-yellow-100 text-yellow-800',
-            high: 'bg-orange-100 text-orange-800',
-            critical: 'bg-red-100 text-red-800'
+            low: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
+            medium: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
+            high: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
+            critical: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
         };
         return colors[priority as keyof typeof colors] || colors.medium;
     };
 
     const getSeverityColor = (severity: string) => {
         const colors = {
-            minor: 'bg-green-100 text-green-800',
-            major: 'bg-yellow-100 text-yellow-800',
-            critical: 'bg-orange-100 text-orange-800',
-            blocker: 'bg-red-100 text-red-800'
+            minor: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
+            major: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
+            critical: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
+            blocker: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
         };
         return colors[severity as keyof typeof colors] || colors.major;
     };
@@ -219,6 +242,154 @@ export default function Index({ bugs, projects, statuses, members, filters, user
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Bugs') }
     ];
+
+    const handleProjectFilter = (value: string) => {
+        setSelectedProject(value);
+        router.get(route('bugs.index'), buildParams({ page: 1 }, { project: value }), { preserveState: false, preserveScroll: false });
+    };
+    
+    const handleStatusFilter = (value: string) => {
+        setSelectedStatus(value);
+        router.get(route('bugs.index'), buildParams({ page: 1 }, { status: value }), { preserveState: false, preserveScroll: false });
+    };
+    
+    const handlePriorityFilter = (value: string) => {
+        setSelectedPriority(value);
+        router.get(route('bugs.index'), buildParams({ page: 1 }, { priority: value }), { preserveState: false, preserveScroll: false });
+    };
+    
+    const handleSeverityFilter = (value: string) => {
+        setSelectedSeverity(value);
+        router.get(route('bugs.index'), buildParams({ page: 1 }, { severity: value }), { preserveState: false, preserveScroll: false });
+    };
+
+    const handleSort = (field: string) => {
+        const direction = filters.sort_field === field && filters.sort_direction === 'asc' ? 'desc' : 'asc';
+        router.get(route('bugs.index'), buildParams({ sort_field: field, sort_direction: direction, page: 1 }), { preserveState: false, preserveScroll: false });
+    };
+
+    // Handle actions for CrudTable
+    const handleAction = (action: string, bugOrId: Bug | number) => {
+        let bug: Bug;
+        
+        if (typeof bugOrId === 'number') {
+            // Called with bug ID
+            bug = bugsData?.find((b: any) => b.id === bugOrId);
+            if (!bug) return;
+        } else {
+            // Called with bug object from CrudTable
+            bug = bugOrId;
+        }
+
+        switch (action) {
+            case 'view':
+            case 'edit':
+                openBugModal(bug);
+                break;
+            case 'delete':
+                handleDeleteBug(bug);
+                break;
+        }
+    };
+
+    // CrudTable configuration
+    const columns = [
+        {
+            key: 'title',
+            label: t('Bug'),
+            sortable: true,
+            render: (value: string, row: any) => (
+                <div className="flex items-center">
+                    <div>
+                        <div 
+                            className="text-sm font-medium text-gray-900 cursor-pointer hover:text-red-600 transition-colors"
+                            onClick={() => openBugModal(row)}
+                        >
+                            {value}
+                        </div>
+                        <div className="text-sm text-gray-500 truncate max-w-xs">{row.description}</div>
+                    </div>
+                </div>
+            )
+        },
+        {
+            key: 'bug_status.name',
+            label: t('Status'),
+            render: (value: string, row: any) => (
+                <span
+                    className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset"
+                    style={{
+                        backgroundColor: row.bug_status?.color + '20',
+                        color: row.bug_status?.color,
+                        boxShadow: `inset 0 0 0 1px ${row.bug_status?.color}33`,
+                    }}
+                >
+                    {formatText(value)}
+                </span>
+            )
+        },
+        {
+            key: 'priority',
+            label: t('Priority'),
+            sortable: true,
+            render: (value: string) => (
+                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(value)}`}>
+                    {formatText(value)}
+                </span>
+            )
+        },
+        {
+            key: 'severity',
+            label: t('Severity'),
+            sortable: true,
+            render: (value: string) => (
+                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getSeverityColor(value)}`}>
+                    {formatText(value)}
+                </span>
+            )
+        },
+        {
+            key: 'project.title',
+            label: t('Project'),
+            render: (value: string) => value || '-'
+        },
+        {
+            key: 'assigned_to',
+            label: t('Assigned To'),
+            render: (value: any) => (
+                value ? (
+                    <div className="flex items-center">
+                        <Avatar className="h-6 w-6 mr-2">
+                            <AvatarImage src={value.avatar} />
+                            <AvatarFallback className="text-xs">
+                                {value.name?.charAt(0)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm text-gray-900">{value.name}</span>
+                    </div>
+                ) : (
+                    <span className="text-sm text-gray-500">{t('Unassigned')}</span>
+                )
+            )
+        }
+    ];
+
+    const actions = [
+        {
+            label: t('Edit'),
+            icon: 'Edit',
+            action: 'edit',
+            className: 'text-amber-500 hover:text-amber-700',
+            condition: () => bugPermissions?.update
+        },
+        {
+            label: t('Delete'),
+            icon: 'Trash2',
+            action: 'delete',
+            className: 'text-red-500 hover:text-red-700',
+            condition: () => bugPermissions?.delete
+        }
+    ];
     
     return (
         <PageTemplate 
@@ -230,39 +401,68 @@ export default function Index({ bugs, projects, statuses, members, filters, user
         >
             <Head title={t('Bugs')} />
             
-            {/* Overview Cards */}
-            <Card className="mb-4 hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                    <div className="grid grid-cols-5 gap-4">
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-red-600">
+            {/* Overview Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                {/* Total Bugs */}
+                <Card className="hover:shadow-lg transition-all duration-300">
+                    <CardContent className="p-5 flex items-center space-x-4">
+                        <div className="p-3 bg-red-50 rounded-xl">
+                            <Bug className="h-6 w-6 text-red-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">{t('Total Bugs')}</p>
+                            <h3 className="text-xl font-bold text-gray-900">
                                 {Array.isArray(bugs) ? bugs.length : bugs?.total || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('Total Bugs')}</div>
+                            </h3>
                         </div>
-                        {statuses.slice(0, 3).map((status, index) => {
-                            const colors = ['text-orange-600', 'text-blue-600', 'text-green-600'];
-                            return (
-                                <div key={status.id} className="text-center">
-                                    <div className={`text-xl font-bold ${colors[index] || 'text-gray-600'}`}>
-                                        {bugsData?.filter((bug: any) => bug.bug_status?.id === status.id).length || 0}
-                                    </div>
-                                    <div className="text-xs text-gray-600">{status.name}</div>
+                    </CardContent>
+                </Card>
+
+                {/* Status Cards (Dynamics based on statuses array) */}
+                {statuses.slice(0, 3).map((status, index) => {
+                    const iconColors = ['text-orange-600', 'text-blue-600', 'text-green-600'];
+                    const bgColors = ['bg-orange-50', 'bg-blue-50', 'bg-green-50'];
+                    const borderColors = ['border-l-orange-500', 'border-l-blue-500', 'border-l-green-500'];
+                    const Icons = [AlertTriangle, Zap, CheckCircle2];
+                    const Icon = Icons[index] || Bug;
+
+                    return (
+                        <Card key={status.id} className={`hover:shadow-lg transition-all duration-300`}>
+                            <CardContent className="p-5 flex items-center space-x-4">
+                                <div className={`p-3 ${bgColors[index] || 'bg-gray-50'} rounded-xl`}>
+                                    <Icon className={`h-6 w-6 ${iconColors[index] || 'text-gray-600'}`} />
                                 </div>
-                            );
-                        })}
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-red-600">
-                                {bugsData?.filter((bug: any) => bug.priority === 'critical' || bug.severity === 'blocker').length || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('Critical')}</div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">
+                                        {status.name}
+                                    </p>
+                                    <h3 className="text-xl font-bold text-gray-900">
+                                        {bugsData?.filter((bug: any) => bug.bug_status?.id === status.id).length || 0}
+                                    </h3>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+
+                {/* Critical Bugs */}
+                <Card className="hover:shadow-lg transition-all duration-300">
+                    <CardContent className="p-5 flex items-center space-x-4">
+                        <div className="p-3 bg-red-100 rounded-xl">
+                            <Flame className="h-6 w-6 text-red-900" />
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">{t('Critical')}</p>
+                            <h3 className="text-xl font-bold text-gray-900">
+                                {bugsData?.filter((bug: any) => bug.priority === 'critical' || bug.severity === 'blocker').length || 0}
+                            </h3>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Search and filters section */}
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="bg-white rounded-lg border shadow mb-4">
                 <div className="p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -306,25 +506,25 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                     size="sm" 
                                     variant={activeView === 'kanban' ? "default" : "ghost"}
                                     className="h-7 px-2"
-                                    onClick={() => setActiveView('kanban')}
+                                    onClick={() => { setActiveView('kanban'); router.get(route('bugs.index'), buildParams({ view: 'kanban' }, { view: 'kanban' }), { preserveState: false, preserveScroll: false }); }}
                                 >
-                                    <Columns3 className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant={activeView === 'list' ? "default" : "ghost"}
-                                    className="h-7 px-2"
-                                    onClick={() => setActiveView('list')}
-                                >
-                                    <List className="h-4 w-4" />
+                                    <Columns className="h-4 w-4" />
                                 </Button>
                                 <Button 
                                     size="sm" 
                                     variant={activeView === 'grid' ? "default" : "ghost"}
                                     className="h-7 px-2"
-                                    onClick={() => setActiveView('grid')}
+                                    onClick={() => { setActiveView('grid'); router.get(route('bugs.index'), buildParams({ page: 1, view: 'grid' }, { view: 'grid' }), { preserveState: false, preserveScroll: false }); }}
                                 >
                                     <LayoutGrid className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant={activeView === 'list' ? "default" : "ghost"}
+                                    className="h-7 px-2"
+                                    onClick={() => { setActiveView('list'); router.get(route('bugs.index'), buildParams({ page: 1, view: 'list' }, { view: 'list' }), { preserveState: false, preserveScroll: false }); }}
+                                >
+                                    <List className="h-4 w-4" />
                                 </Button>
                             </div>
                             
@@ -333,24 +533,17 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                 <>
                                     <Label className="text-xs text-muted-foreground">Per Page:</Label>
                                     <Select 
-                                        value={filters.per_page?.toString() || "20"} 
+                                        value={filters.per_page?.toString() || "10"} 
                                         onValueChange={(value) => {
-                                            const params: any = { page: 1, per_page: parseInt(value) };
-                                            if (searchTerm) params.search = searchTerm;
-                                            if (selectedProject !== 'all') params.project_id = selectedProject;
-                                            if (selectedStatus !== 'all') params.status_id = selectedStatus;
-                                            if (selectedPriority !== 'all') params.priority = selectedPriority;
-                                            if (selectedSeverity !== 'all') params.severity = selectedSeverity;
-                                            params.view = activeView;
-                                            if (project_name) params.project_name = project_name;
-                                            router.get(route('bugs.index'), params, { preserveState: false, preserveScroll: false });
+                                            router.get(route('bugs.index'), buildParams({ page: 1, per_page: parseInt(value) }), { preserveState: false, preserveScroll: false });
                                         }}
                                     >
                                         <SelectTrigger className="w-16 h-8">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="z-[9999]">
-                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="25">25</SelectItem>
                                             <SelectItem value="50">50</SelectItem>
                                             <SelectItem value="100">100</SelectItem>
                                         </SelectContent>
@@ -365,7 +558,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                             <div className="flex flex-wrap gap-4 items-end">
                                 <div className="space-y-2">
                                     <Label>Project</Label>
-                                    <Select value={selectedProject} onValueChange={setSelectedProject}>
+                                    <Select value={selectedProject} onValueChange={handleProjectFilter}>
                                         <SelectTrigger className="w-40">
                                             <SelectValue placeholder="All Projects" />
                                         </SelectTrigger>
@@ -382,7 +575,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                 
                                 <div className="space-y-2">
                                     <Label>Status</Label>
-                                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                                    <Select value={selectedStatus} onValueChange={handleStatusFilter}>
                                         <SelectTrigger className="w-32">
                                             <SelectValue placeholder="All Statuses" />
                                         </SelectTrigger>
@@ -399,7 +592,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                 
                                 <div className="space-y-2">
                                     <Label>Priority</Label>
-                                    <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+                                    <Select value={selectedPriority} onValueChange={handlePriorityFilter}>
                                         <SelectTrigger className="w-32">
                                             <SelectValue placeholder="All Priorities" />
                                         </SelectTrigger>
@@ -415,7 +608,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                 
                                 <div className="space-y-2">
                                     <Label>Severity</Label>
-                                    <Select value={selectedSeverity} onValueChange={setSelectedSeverity}>
+                                    <Select value={selectedSeverity} onValueChange={handleSeverityFilter}>
                                         <SelectTrigger className="w-32">
                                             <SelectValue placeholder="All Severities" />
                                         </SelectTrigger>
@@ -518,7 +711,6 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                                             <div className="space-y-2">
                                                                 <div className="flex items-start justify-between gap-2">
                                                                     <div className="flex items-start gap-2 flex-1 min-w-0">
-                                                                        <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
                                                                         <div>
                                                                             <h4 
                                                                                 className="font-medium text-sm hover:text-red-600 transition-colors cursor-pointer break-words"
@@ -530,53 +722,56 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                                                             >
                                                                                 {bug.title}
                                                                             </h4>
-                                                                            {bug.description && (
-                                                                                <p className="text-xs text-gray-500 mt-1 line-clamp-2" title={bug.description}>
-                                                                                    {bug.description}
-                                                                                </p>
-                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex gap-1 flex-shrink-0">
-
-                                                                        <Button 
-                                                                            variant="ghost" 
-                                                                            size="icon" 
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                openBugModal(bug);
-                                                                            }}
-                                                                            className="h-6 w-6 text-amber-500 hover:text-amber-700"
-                                                                        >
-                                                                            <Edit className="h-3 w-3" />
-                                                                        </Button>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button 
+                                                                                    variant="ghost" 
+                                                                                    size="icon" 
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        openBugModal(bug);
+                                                                                    }}
+                                                                                    className="h-6 w-6 text-amber-500 hover:text-amber-700"
+                                                                                >
+                                                                                    <Edit className="h-3 w-3" />
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>{t('Edit')}</TooltipContent>
+                                                                        </Tooltip>
                                                                         {bugPermissions?.delete && (
-                                                                            <Button 
-                                                                                variant="ghost" 
-                                                                                size="icon" 
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleDeleteBug(bug);
-                                                                                }}
-                                                                                className="h-6 w-6 text-red-500 hover:text-red-700"
-                                                                            >
-                                                                                <Trash2 className="h-3 w-3" />
-                                                                            </Button>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <Button 
+                                                                                        variant="ghost" 
+                                                                                        size="icon" 
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleDeleteBug(bug);
+                                                                                        }}
+                                                                                        className="h-6 w-6 text-red-500 hover:text-red-700"
+                                                                                    >
+                                                                                        <Trash2 className="h-3 w-3" />
+                                                                                    </Button>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>{t('Delete')}</TooltipContent>
+                                                                            </Tooltip>
                                                                         )}
                                                                     </div>
                                                                 </div>
                                                                 
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    <Badge className={getPriorityColor(bug.priority)} variant="secondary" size="sm">
-                                                                        {bug.priority}
-                                                                    </Badge>
-                                                                    <Badge className={getSeverityColor(bug.severity)} variant="secondary" size="sm">
-                                                                        {bug.severity}
-                                                                    </Badge>
+                                                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(bug.priority)}`}>
+                                                                        {formatText(bug.priority)}
+                                                                    </span>
+                                                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getSeverityColor(bug.severity)}`}>
+                                                                        {formatText(bug.severity)}
+                                                                    </span>
                                                                 </div>
                                                                 
                                                                 <div className="flex items-center gap-1 text-xs text-gray-600">
-                                                                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                                                                     <span className="font-medium">{bug.project?.title}</span>
                                                                 </div>
                                                                 
@@ -585,9 +780,12 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                                                         {bug.assigned_to ? (
                                                                             <div className="flex items-center gap-2">
                                                                                 <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
-                                                                                    <span className="text-blue-600 font-semibold text-xs">
-                                                                                        {bug.assigned_to.name.charAt(0).toUpperCase()}
-                                                                                    </span>
+                                                                                    <Avatar className="h-6 w-6">
+                                                                                        <AvatarImage src={bug.assigned_to.avatar} />
+                                                                                        <AvatarFallback className="text-xs">
+                                                                                            {bug.assigned_to.name.charAt(0).toUpperCase()}
+                                                                                        </AvatarFallback>
+                                                                                    </Avatar>
                                                                                 </div>
                                                                                 <span className="text-xs text-gray-700">{bug.assigned_to.name}</span>
                                                                             </div>
@@ -635,183 +833,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                 </div>
                 </div>
             ) : activeView === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {bugsData?.map((bug: any) => (
-                        <Card key={bug.id} className="hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-2">
-                                <div className="flex justify-between items-start">
-                                    <CardTitle className="text-base cursor-pointer hover:text-red-600 transition-colors break-words" onClick={() => openBugModal(bug)} title={bug.title}>
-                                        {bug.title}
-                                    </CardTitle>
-                                    <Bug className="h-4 w-4 text-red-500 flex-shrink-0" />
-                                </div>
-                                {bug.description && (
-                                    <p className="text-sm text-muted-foreground line-clamp-2" title={bug.description}>{bug.description}</p>
-                                )}
-                            </CardHeader>
-                            
-                            <CardContent className="py-2">
-                                <div className="space-y-3">
-                                    <div className="flex gap-2">
-                                        <Badge className={getPriorityColor(bug.priority)} variant="secondary">
-                                            {bug.priority}
-                                        </Badge>
-                                        <Badge className={getSeverityColor(bug.severity)} variant="secondary">
-                                            {bug.severity}
-                                        </Badge>
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-center text-xs">
-                                        <Badge style={{ backgroundColor: bug.bug_status?.color }} className="text-white">
-                                            {bug.bug_status?.name}
-                                        </Badge>
-                                        <span className="text-muted-foreground">
-                                            {bug.project?.title}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="flex items-center justify-between">
-                                        {bug.assigned_to ? (
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="h-6 w-6">
-                                                    <AvatarFallback className="text-xs">
-                                                        {bug.assigned_to.name?.charAt(0)}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <span className="text-xs text-gray-600">{bug.assigned_to.name}</span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-500">Unassigned</span>
-                                        )}
-                                        <div className="text-xs text-gray-500 text-right">
-                                            <div>Created: {new Date(bug.created_at).toLocaleDateString()}</div>
-                                            <div>Updated: {new Date(bug.updated_at || bug.created_at).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                            
-                            <CardFooter className="flex justify-end gap-1 pt-0 pb-2">
-
-                                {bugPermissions?.update && (
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" onClick={() => openBugModal(bug)} className="text-amber-500 hover:text-amber-700 h-8 w-8">
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Edit</TooltipContent>
-                                    </Tooltip>
-                                )}
-                                {bugPermissions?.delete && (
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteBug(bug)} className="text-red-500 hover:text-red-700 h-8 w-8">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Delete</TooltipContent>
-                                    </Tooltip>
-                                )}
-                            </CardFooter>
-                        </Card>
-                    ))}
-                </div>
-            ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bug</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {bugsData?.map((bug: any) => (
-                                    <tr key={bug.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <Bug className="h-4 w-4 text-red-500 mr-2" />
-                                                <div>
-                                                    <div className="text-sm font-medium text-gray-900 cursor-pointer hover:text-red-600 transition-colors" onClick={() => openBugModal(bug)}>
-                                                        {bug.title}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500 truncate max-w-xs">{bug.description}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge style={{ backgroundColor: bug.bug_status?.color }} className="text-white">
-                                                {bug.bug_status?.name}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge className={getPriorityColor(bug.priority)} variant="secondary">
-                                                {bug.priority}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge className={getSeverityColor(bug.severity)} variant="secondary">
-                                                {bug.severity}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {bug.project?.title}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {bug.assigned_to ? (
-                                                <div className="flex items-center">
-                                                    <Avatar className="h-6 w-6 mr-2">
-                                                        <AvatarFallback className="text-xs">
-                                                            {bug.assigned_to.name?.charAt(0)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <span className="text-sm text-gray-900">{bug.assigned_to.name}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-sm text-gray-500">Unassigned</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex gap-1">
-
-                                                {bugPermissions?.update && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" onClick={() => openBugModal(bug)} className="text-amber-500 hover:text-amber-700 h-8 w-8">
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Edit</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                {bugPermissions?.delete && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteBug(bug)} className="text-red-500 hover:text-red-700 h-8 w-8">
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Delete</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {(!bugsData || bugsData.length === 0) && (
+                (!bugsData || bugsData.length === 0) ? (
                 <Card className="border-dashed border-2">
                     <CardContent className="flex flex-col items-center justify-center py-12">
                         <Bug className="w-12 h-12 text-gray-400 mb-4" />
@@ -827,11 +849,148 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                         )}
                     </CardContent>
                 </Card>
-            )}
+                ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {bugsData?.map((bug: any) => (
+                        <Card key={bug.id} className="hover:shadow-md transition-shadow">
+                            <CardHeader className="pb-2">
+                                <div className="flex justify-between items-start">
+                                    <CardTitle className="text-base cursor-pointer hover:text-red-600 transition-colors break-words" onClick={() => openBugModal(bug)} title={bug.title}>
+                                        {bug.title}
+                                    </CardTitle>
+                                </div>
+                                {bug.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2" title={bug.description}>{bug.description}</p>
+                                )}
+                            </CardHeader>
+                            
+                            <CardContent className="py-2">
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(bug.priority)}`}>
+                                            {formatText(bug.priority)}
+                                        </span>
+                                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getSeverityColor(bug.severity)}`}>
+                                            {formatText(bug.severity)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span
+                                            className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset"
+                                            style={{
+                                                backgroundColor: bug.bug_status?.color + '20',
+                                                color: bug.bug_status?.color,
+                                                boxShadow: `inset 0 0 0 1px ${bug.bug_status?.color}33`,
+                                            }}
+                                        >
+                                            {formatText(bug.bug_status?.name)}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            {bug.project?.title}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between">
+                                        {bug.assigned_to ? (
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="h-6 w-6">
+                                                    <AvatarImage src={bug.assigned_to.avatar} />
+                                                    <AvatarFallback className="text-xs">
+                                                        {bug.assigned_to.name?.charAt(0)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs text-gray-600">{bug.assigned_to.name}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-500">Unassigned</span>
+                                        )}
+                                        <div className="text-xs text-gray-500 text-right">
+                                            <div>Created: {window.appSettings.formatDateTime(new Date(bug.created_at),false)}</div>
+                                            <div>Updated: {window.appSettings.formatDateTime(new Date(bug.updated_at || bug.created_at),false)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                            
+                            <CardFooter className="flex justify-end gap-1 pt-0 pb-2">
+
+                                {bugPermissions?.update && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" onClick={() => openBugModal(bug)} className="text-amber-500 hover:text-amber-700 h-8 w-8">
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{t('Edit')}</TooltipContent>
+                                    </Tooltip>
+                                )}
+                                {bugPermissions?.delete && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteBug(bug)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{t('Delete')}</TooltipContent>
+                                    </Tooltip>
+                                )}
+                            </CardFooter>
+                        </Card>
+                    ))}
+                </div>
+                )
+            ) : (
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                    <CrudTable
+                        columns={columns}
+                        actions={actions}
+                        data={bugsData || []}
+                        from={Array.isArray(bugs) ? 1 : bugs?.from || 1}
+                        onAction={handleAction}
+                        sortField={filters.sort_field}
+                        sortDirection={filters.sort_direction}
+                        onSort={handleSort}
+                        permissions={[]}
+                    />
+                    {/* Pagination - for list view */}
+                    {activeView === 'list' && !Array.isArray(bugs) && bugs?.links && (
+                        <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
+                            <div className="text-sm text-muted-foreground">
+                                Showing <span className="font-medium">{bugs?.from || 0}</span> to <span className="font-medium">{bugs?.to || 0}</span> of <span className="font-medium">{bugs?.total || 0}</span> bugs
+                            </div>
+                            
+                            <div className="flex gap-1">
+                                {bugs?.links?.map((link: any, i: number) => {
+                                    const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
+                                    const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
+                                    
+                                    return (
+                                        <Button
+                                            key={i}
+                                            variant={link.active ? 'default' : 'outline'}
+                                            size={isTextLink ? "sm" : "icon"}
+                                            className={isTextLink ? "px-3" : "h-8 w-8"}
+                                            disabled={!link.url}
+                                            onClick={() => {
+                                                if (!link.url) return;
+                                                const pageNum = new URL(link.url).searchParams.get('page');
+                                                router.get(route('bugs.index'), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false, preserveScroll: false });
+                                            }}
+                                        >
+                                            {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                )}
             
-            {/* Pagination - Hidden in Kanban view */}
-            {activeView !== 'kanban' && !Array.isArray(bugs) && bugs?.links && (
-                <div className="mt-6 bg-white p-4 rounded-lg shadow flex items-center justify-between">
+            {/* Pagination - For grid view */}
+            {activeView === 'grid' && !Array.isArray(bugs) && bugs?.links && (
+                <div className="mt-6 bg-[#F0F0F1] dark:bg-gray-800 p-4 rounded-lg shadow flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
                         Showing <span className="font-medium">{bugs?.from || 0}</span> to <span className="font-medium">{bugs?.to || 0}</span> of <span className="font-medium">{bugs?.total || 0}</span> bugs
                     </div>
@@ -848,7 +1007,11 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                                     size={isTextLink ? "sm" : "icon"}
                                     className={isTextLink ? "px-3" : "h-8 w-8"}
                                     disabled={!link.url}
-                                    onClick={() => link.url && router.get(link.url)}
+                                    onClick={() => {
+                                        if (!link.url) return;
+                                        const pageNum = new URL(link.url).searchParams.get('page');
+                                        router.get(route('bugs.index'), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false, preserveScroll: false });
+                                    }}
                                 >
                                     {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                                 </Button>

@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Models\Plan;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
-
+use App\Exports\CompanyExport;
+use App\Imports\CompanyImport;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -291,6 +293,34 @@ class CompanyController extends Controller
         
         return back()->with('success', __('Plan upgraded successfully'));
     }
-    
 
+    public function export(Request $request)
+    {
+        return Excel::download(new CompanyExport($request), 'companies_' . date('Y-m-d_His') . '.xlsx');
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate(['file' => 'required|mimes:xlsx,xls,csv|max:2048']);
+        $import = new CompanyImport();
+        Excel::import($import, $request->file('file'));
+        $imported = $import->getImportedCount();
+        $skipped  = $import->getSkippedCount();
+        return back()->with('success', __('Imported :imported companies. Skipped :skipped duplicates.', compact('imported', 'skipped')));
+    }
+
+    public function downloadSample()
+    {
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="company_import_sample.csv"',
+        ];
+        $callback = function() {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['name', 'email', 'status']);
+            fputcsv($file, ['Acme Corporation', 'acme@example.com', 'active']);
+            fclose($file);
+        };
+        return response()->stream($callback, 200, $headers);
+    }
 }

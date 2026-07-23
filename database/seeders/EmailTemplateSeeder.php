@@ -433,6 +433,426 @@ class EmailTemplateSeeder extends Seeder
                         'content' => '<h2>已创建新发票</h2><p>您好 <strong>{client_name}</strong>,</p><p>已为您创建新发票。</p><p><strong>发票号码:</strong> {invoice_number}</p><p><strong>发票标题:</strong> {invoice_title}</p><p><strong>项目:</strong> {project_name}</p><p><strong>总金额:</strong> {total_amount} {currency}</p><p><strong>到期日期:</strong> {due_date}</p><p><strong>工作区:</strong> {workspace_name}</p><p><strong>创建者:</strong> {creator_name}</p><p>此致敬礼,<br><strong>{app_name} 团队</strong></p>'
                     ],
                 ]
+            ],
+            [
+                'name' => 'New Contract',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'New Contract Created: {contract_subject}',
+                        'content' => '<h2>New Contract Created</h2><p>Hello <strong>{client_name}</strong>,</p><p>A new contract has been created for you.</p><p><strong>Contract ID:</strong> {contract_id}</p><p><strong>Subject:</strong> {contract_subject}</p><p><strong>Contract Type:</strong> {contract_type}</p><p><strong>Description:</strong> {contract_description}</p><p><strong>Contract Value:</strong> {contract_value} {currency}</p><p><strong>Start Date:</strong> {start_date}</p><p><strong>End Date:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Created by:</strong> {creator_name}</p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Nuevo contrato creado: {contract_subject}',
+                        'content' => '<h2>Nuevo contrato creado</h2><p>Hola <strong>{client_name}</strong>,</p><p>Se ha creado un nuevo contrato para ti.</p><p><strong>ID del contrato:</strong> {contract_id}</p><p><strong>Asunto:</strong> {contract_subject}</p><p><strong>Tipo de contrato:</strong> {contract_type}</p><p><strong>Descripción:</strong> {contract_description}</p><p><strong>Valor del contrato:</strong> {contract_value} {currency}</p><p><strong>Fecha de inicio:</strong> {start_date}</p><p><strong>Fecha de finalización:</strong> {end_date}</p><p><strong>Estado:</strong> {status}</p><p><strong>Creado por:</strong> {creator_name}</p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'تم إنشاء عقد جديد: {contract_subject}',
+                        'content' => '<h2>تم إنشاء عقد جديد</h2><p>مرحباً <strong>{client_name}</strong>،</p><p>تم إنشاء عقد جديد لك.</p><p><strong>معرف العقد:</strong> {contract_id}</p><p><strong>الموضوع:</strong> {contract_subject}</p><p><strong>نوع العقد:</strong> {contract_type}</p><p><strong>الوصف:</strong> {contract_description}</p><p><strong>قيمة العقد:</strong> {contract_value} {currency}</p><p><strong>تاريخ البداية:</strong> {start_date}</p><p><strong>تاريخ الانتهاء:</strong> {end_date}</p><p><strong>الحالة:</strong> {status}</p><p><strong>تم الإنشاء بواسطة:</strong> {creator_name}</p><p>مع أطيب التحيات,<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'Ny kontrakt oprettet: {contract_subject}',
+                        'content' => '<h2>Ny kontrakt oprettet</h2><p>Hej <strong>{client_name}</strong>,</p><p>Der er oprettet en ny kontrakt til dig.</p><p><strong>Kontrakt ID:</strong> {contract_id}</p><p><strong>Emne:</strong> {contract_subject}</p><p><strong>Kontrakttype:</strong> {contract_type}</p><p><strong>Beskrivelse:</strong> {contract_description}</p><p><strong>Kontraktværdi:</strong> {contract_value} {currency}</p><p><strong>Startdato:</strong> {start_date}</p><p><strong>Slutdato:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Oprettet af:</strong> {creator_name}</p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'Neuer Vertrag erstellt: {contract_subject}',
+                        'content' => '<h2>Neuer Vertrag erstellt</h2><p>Hallo <strong>{client_name}</strong>,</p><p>Ein neuer Vertrag wurde für Sie erstellt.</p><p><strong>Vertrags-ID:</strong> {contract_id}</p><p><strong>Betreff:</strong> {contract_subject}</p><p><strong>Vertragstyp:</strong> {contract_type}</p><p><strong>Beschreibung:</strong> {contract_description}</p><p><strong>Vertragswert:</strong> {contract_value} {currency}</p><p><strong>Startdatum:</strong> {start_date}</p><p><strong>Enddatum:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Erstellt von:</strong> {creator_name}</p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Nouveau contrat créé : {contract_subject}',
+                        'content' => '<h2>Nouveau contrat créé</h2><p>Bonjour <strong>{client_name}</strong>,</p><p>Un nouveau contrat a été créé pour vous.</p><p><strong>ID du contrat :</strong> {contract_id}</p><p><strong>Sujet :</strong> {contract_subject}</p><p><strong>Type de contrat :</strong> {contract_type}</p><p><strong>Description :</strong> {contract_description}</p><p><strong>Valeur du contrat :</strong> {contract_value} {currency}</p><p><strong>Date de début :</strong> {start_date}</p><p><strong>Date de fin :</strong> {end_date}</p><p><strong>Statut :</strong> {status}</p><p><strong>Créé par :</strong> {creator_name}</p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'חוזה חדש נוצר: {contract_subject}',
+                        'content' => '<h2>חוזה חדש נוצר</h2><p>שלום <strong>{client_name}</strong>,</p><p>נוצר עבורך חוזה חדש.</p><p><strong>מזהה חוזה:</strong> {contract_id}</p><p><strong>נושא:</strong> {contract_subject}</p><p><strong>ערך החוזה:</strong> {contract_value} {currency}</p><p><strong>תאריך התחלה:</strong> {start_date}</p><p><strong>תאריך סיום:</strong> {end_date}</p><p><strong>סטטוס:</strong> {status}</p><p><strong>נוצר על ידי:</strong> {creator_name}</p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Nuovo contratto creato: {contract_subject}',
+                        'content' => '<h2>Nuovo contratto creato</h2><p>Ciao <strong>{client_name}</strong>,</p><p>È stato creato un nuovo contratto per te.</p><p><strong>ID contratto:</strong> {contract_id}</p><p><strong>Oggetto:</strong> {contract_subject}</p><p><strong>Tipo contratto:</strong> {contract_type}</p><p><strong>Descrizione:</strong> {contract_description}</p><p><strong>Valore contratto:</strong> {contract_value} {currency}</p><p><strong>Data inizio:</strong> {start_date}</p><p><strong>Data fine:</strong> {end_date}</p><p><strong>Stato:</strong> {status}</p><p><strong>Creato da:</strong> {creator_name}</p><p>Cordiali saluti,<br><strong>Team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => '新しい契約が作成されました: {contract_subject}',
+                        'content' => '<h2>新しい契約が作成されました</h2><p>こんにちは <strong>{client_name}</strong> さん、</p><p>新しい契約が作成されました。</p><p><strong>契約ID:</strong> {contract_id}</p><p><strong>件名:</strong> {contract_subject}</p><p><strong>契約金額:</strong> {contract_value} {currency}</p><p><strong>開始日:</strong> {start_date}</p><p><strong>終了日:</strong> {end_date}</p><p><strong>ステータス:</strong> {status}</p><p><strong>作成者:</strong> {creator_name}</p><p>よろしくお願いします,<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'Nieuw contract aangemaakt: {contract_subject}',
+                        'content' => '<h2>Nieuw contract aangemaakt</h2><p>Hallo <strong>{client_name}</strong>,</p><p>Er is een nieuw contract voor je aangemaakt.</p><p><strong>Contract ID:</strong> {contract_id}</p><p><strong>Onderwerp:</strong> {contract_subject}</p><p><strong>Contracttype:</strong> {contract_type}</p><p><strong>Beschrijving:</strong> {contract_description}</p><p><strong>Contractwaarde:</strong> {contract_value} {currency}</p><p><strong>Startdatum:</strong> {start_date}</p><p><strong>Einddatum:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Gemaakt door:</strong> {creator_name}</p><p>Met vriendelijke groet,<br><strong>{app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Nowa umowa utworzona: {contract_subject}',
+                        'content' => '<h2>Nowa umowa utworzona</h2><p>Witaj <strong>{client_name}</strong>,</p><p>Utworzono dla Ciebie nową umowę.</p><p><strong>ID umowy:</strong> {contract_id}</p><p><strong>Temat:</strong> {contract_subject}</p><p><strong>Typ umowy:</strong> {contract_type}</p><p><strong>Opis:</strong> {contract_description}</p><p><strong>Wartość umowy:</strong> {contract_value} {currency}</p><p><strong>Data rozpoczęcia:</strong> {start_date}</p><p><strong>Data zakończenia:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Utworzono przez:</strong> {creator_name}</p><p>Pozdrawiamy,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Novo contrato criado: {contract_subject}',
+                        'content' => '<h2>Novo contrato criado</h2><p>Olá <strong>{client_name}</strong>,</p><p>Um novo contrato foi criado para você.</p><p><strong>ID do contrato:</strong> {contract_id}</p><p><strong>Assunto:</strong> {contract_subject}</p><p><strong>Tipo de contrato:</strong> {contract_type}</p><p><strong>Descrição:</strong> {contract_description}</p><p><strong>Valor do contrato:</strong> {contract_value} {currency}</p><p><strong>Data de início:</strong> {start_date}</p><p><strong>Data de término:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Criado por:</strong> {creator_name}</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Novo contrato criado: {contract_subject}',
+                        'content' => '<h2>Novo contrato criado</h2><p>Olá <strong>{client_name}</strong>,</p><p>Um novo contrato foi criado para você.</p><p><strong>ID do contrato:</strong> {contract_id}</p><p><strong>Assunto:</strong> {contract_subject}</p><p><strong>Tipo de contrato:</strong> {contract_type}</p><p><strong>Descrição:</strong> {contract_description}</p><p><strong>Valor do contrato:</strong> {contract_value} {currency}</p><p><strong>Data de início:</strong> {start_date}</p><p><strong>Data de término:</strong> {end_date}</p><p><strong>Status:</strong> {status}</p><p><strong>Criado por:</strong> {creator_name}</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Создан новый контракт: {contract_subject}',
+                        'content' => '<h2>Создан новый контракт</h2><p>Здравствуйте <strong>{client_name}</strong>,</p><p>Для вас создан новый контракт.</p><p><strong>ID контракта:</strong> {contract_id}</p><p><strong>Тема:</strong> {contract_subject}</p><p><strong>Тип контракта:</strong> {contract_type}</p><p><strong>Описание:</strong> {contract_description}</p><p><strong>Стоимость контракта:</strong> {contract_value} {currency}</p><p><strong>Дата начала:</strong> {start_date}</p><p><strong>Дата окончания:</strong> {end_date}</p><p><strong>Статус:</strong> {status}</p><p><strong>Создано:</strong> {creator_name}</p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Yeni sözleşme oluşturuldu: {contract_subject}',
+                        'content' => '<h2>Yeni sözleşme oluşturuldu</h2><p>Merhaba <strong>{client_name}</strong>,</p><p>Sizin için yeni bir sözleşme oluşturuldu.</p><p><strong>Sözleşme ID:</strong> {contract_id}</p><p><strong>Konu:</strong> {contract_subject}</p><p><strong>Sözleşme Türü:</strong> {contract_type}</p><p><strong>Açıklama:</strong> {contract_description}</p><p><strong>Sözleşme Değeri:</strong> {contract_value} {currency}</p><p><strong>Başlangıç Tarihi:</strong> {start_date}</p><p><strong>Bitiş Tarihi:</strong> {end_date}</p><p><strong>Durum:</strong> {status}</p><p><strong>Oluşturan:</strong> {creator_name}</p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => '已创建新合同: {contract_subject}',
+                        'content' => '<h2>已创建新合同</h2><p>您好 <strong>{client_name}</strong>,</p><p>已为您创建新合同。</p><p><strong>合同ID:</strong> {contract_id}</p><p><strong>主题:</strong> {contract_subject}</p><p><strong>合同类型:</strong> {contract_type}</p><p><strong>描述:</strong> {contract_description}</p><p><strong>合同价值:</strong> {contract_value} {currency}</p><p><strong>开始日期:</strong> {start_date}</p><p><strong>结束日期:</strong> {end_date}</p><p><strong>状态:</strong> {status}</p><p><strong>创建者:</strong> {creator_name}</p><p>此致敬礼,<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Zoom Meeting Notification',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'Zoom Meeting Invitation: {meeting_title}',
+                        'content' => '<h2>You have been invited to a Zoom meeting!</h2><p>Hello <strong>{member_name}</strong>,</p><p>You have been invited to join the Zoom meeting "<strong>{meeting_title}</strong>".</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Project:</strong> {project_name}</p><p><strong>Start Time:</strong> {start_time}</p><p><strong>Duration:</strong> {duration} minutes</p><p><strong>Organizer:</strong> {organizer_name}</p><p><strong>Description:</strong> {meeting_description}</p><p><strong>Join URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Invitación a reunión de Zoom: {meeting_title}',
+                        'content' => '<h2>¡Has sido invitado a una reunión de Zoom!</h2><p>Hola <strong>{member_name}</strong>,</p><p>Has sido invitado a unirte a la reunión de Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Reunión:</strong> {meeting_title}</p><p><strong>Proyecto:</strong> {project_name}</p><p><strong>Hora de inicio:</strong> {start_time}</p><p><strong>Duración:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descripción:</strong> {meeting_description}</p><p><strong>URL de unión:</strong> <a href="{join_url}">{join_url}</a></p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'دعوة لاجتماع Zoom: {meeting_title}',
+                        'content' => '<h2>تمت دعوتك لاجتماع Zoom!</h2><p>مرحباً <strong>{member_name}</strong>،</p><p>تمت دعوتك للانضمام إلى اجتماع Zoom "<strong>{meeting_title}</strong>".</p><p><strong>الاجتماع:</strong> {meeting_title}</p><p><strong>المشروع:</strong> {project_name}</p><p><strong>وقت البداية:</strong> {start_time}</p><p><strong>المدة:</strong> {duration} دقيقة</p><p><strong>المنظم:</strong> {organizer_name}</p><p><strong>الوصف:</strong> {meeting_description}</p><p><strong>رابط الانضمام:</strong> <a href="{join_url}">{join_url}</a></p><p>مع أطيب التحيات,<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'Zoom møde invitation: {meeting_title}',
+                        'content' => '<h2>Du er blevet inviteret til et Zoom møde!</h2><p>Hej <strong>{member_name}</strong>,</p><p>Du er blevet inviteret til at deltage i Zoom mødet "<strong>{meeting_title}</strong>".</p><p><strong>Møde:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Starttid:</strong> {start_time}</p><p><strong>Varighed:</strong> {duration} minutter</p><p><strong>Arrangør:</strong> {organizer_name}</p><p><strong>Beskrivelse:</strong> {meeting_description}</p><p><strong>Deltag URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'Zoom Meeting Einladung: {meeting_title}',
+                        'content' => '<h2>Sie wurden zu einem Zoom Meeting eingeladen!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>Sie wurden eingeladen, am Zoom Meeting "<strong>{meeting_title}</strong>" teilzunehmen.</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Startzeit:</strong> {start_time}</p><p><strong>Dauer:</strong> {duration} Minuten</p><p><strong>Organisator:</strong> {organizer_name}</p><p><strong>Beschreibung:</strong> {meeting_description}</p><p><strong>Beitritts-URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Invitation à une réunion Zoom : {meeting_title}',
+                        'content' => '<h2>Vous avez été invité à une réunion Zoom !</h2><p>Bonjour <strong>{member_name}</strong>,</p><p>Vous avez été invité à rejoindre la réunion Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Réunion :</strong> {meeting_title}</p><p><strong>Projet :</strong> {project_name}</p><p><strong>Heure de début :</strong> {start_time}</p><p><strong>Durée :</strong> {duration} minutes</p><p><strong>Organisateur :</strong> {organizer_name}</p><p><strong>Description :</strong> {meeting_description}</p><p><strong>URL de participation :</strong> <a href="{join_url}">{join_url}</a></p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'הזמנה לפגישת Zoom: {meeting_title}',
+                        'content' => '<h2>הוזמנת לפגישת Zoom!</h2><p>שלום <strong>{member_name}</strong>,</p><p>הוזמנת להצטרף לפגישת Zoom "<strong>{meeting_title}</strong>".</p><p><strong>פגישה:</strong> {meeting_title}</p><p><strong>פרויקט:</strong> {project_name}</p><p><strong>שעת התחלה:</strong> {start_time}</p><p><strong>משך:</strong> {duration} דקות</p><p><strong>מארגן:</strong> {organizer_name}</p><p><strong>תיאור:</strong> {meeting_description}</p><p><strong>קישור הצטרפות:</strong> <a href="{join_url}">{join_url}</a></p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Invito riunione Zoom: {meeting_title}',
+                        'content' => '<h2>Sei stato invitato a una riunione Zoom!</h2><p>Ciao <strong>{member_name}</strong>,</p><p>Sei stato invitato a partecipare alla riunione Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Riunione:</strong> {meeting_title}</p><p><strong>Progetto:</strong> {project_name}</p><p><strong>Ora di inizio:</strong> {start_time}</p><p><strong>Durata:</strong> {duration} minuti</p><p><strong>Organizzatore:</strong> {organizer_name}</p><p><strong>Descrizione:</strong> {meeting_description}</p><p><strong>URL di partecipazione:</strong> <a href="{join_url}">{join_url}</a></p><p>Cordiali saluti,<br><strong>Il team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => 'Zoom会議への招待: {meeting_title}',
+                        'content' => '<h2>Zoom会議に招待されました！</h2><p>こんにちは <strong>{member_name}</strong> さん、</p><p>Zoom会議 "<strong>{meeting_title}</strong>" に招待されました。</p><p><strong>会議:</strong> {meeting_title}</p><p><strong>プロジェクト:</strong> {project_name}</p><p><strong>開始時間:</strong> {start_time}</p><p><strong>時間:</strong> {duration} 分</p><p><strong>主催者:</strong> {organizer_name}</p><p><strong>説明:</strong> {meeting_description}</p><p><strong>参加URL:</strong> <a href="{join_url}">{join_url}</a></p><p>よろしくお願いします,<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'Zoom Meeting uitnodiging: {meeting_title}',
+                        'content' => '<h2>Je bent uitgenodigd voor een Zoom meeting!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>Je bent uitgenodigd om deel te nemen aan de Zoom meeting "<strong>{meeting_title}</strong>".</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Project:</strong> {project_name}</p><p><strong>Starttijd:</strong> {start_time}</p><p><strong>Duur:</strong> {duration} minuten</p><p><strong>Organisator:</strong> {organizer_name}</p><p><strong>Beschrijving:</strong> {meeting_description}</p><p><strong>Deelname URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Met vriendelijke groet,<br><strong>{app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Zaproszenie na spotkanie Zoom: {meeting_title}',
+                        'content' => '<h2>Zostałeś zaproszony na spotkanie Zoom!</h2><p>Cześć <strong>{member_name}</strong>,</p><p>Zostałeś zaproszony do udziału w spotkaniu Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Spotkanie:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Czas rozpoczęcia:</strong> {start_time}</p><p><strong>Czas trwania:</strong> {duration} minut</p><p><strong>Organizator:</strong> {organizer_name}</p><p><strong>Opis:</strong> {meeting_description}</p><p><strong>URL dołączenia:</strong> <a href="{join_url}">{join_url}</a></p><p>Z poważaniem,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Convite para reunião Zoom: {meeting_title}',
+                        'content' => '<h2>Você foi convidado para uma reunião Zoom!</h2><p>Olá <strong>{member_name}</strong>,</p><p>Você foi convidado para participar da reunião Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Reunião:</strong> {meeting_title}</p><p><strong>Projeto:</strong> {project_name}</p><p><strong>Horário de início:</strong> {start_time}</p><p><strong>Duração:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descrição:</strong> {meeting_description}</p><p><strong>URL de participação:</strong> <a href="{join_url}">{join_url}</a></p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Convite para reunião Zoom: {meeting_title}',
+                        'content' => '<h2>Você foi convidado para uma reunião Zoom!</h2><p>Olá <strong>{member_name}</strong>,</p><p>Você foi convidado para participar da reunião Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Reunião:</strong> {meeting_title}</p><p><strong>Projeto:</strong> {project_name}</p><p><strong>Horário de início:</strong> {start_time}</p><p><strong>Duração:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descrição:</strong> {meeting_description}</p><p><strong>URL de participação:</strong> <a href="{join_url}">{join_url}</a></p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Приглашение на встречу Zoom: {meeting_title}',
+                        'content' => '<h2>Вас пригласили на встречу Zoom!</h2><p>Здравствуйте <strong>{member_name}</strong>,</p><p>Вас пригласили присоединиться к встрече Zoom "<strong>{meeting_title}</strong>".</p><p><strong>Встреча:</strong> {meeting_title}</p><p><strong>Проект:</strong> {project_name}</p><p><strong>Время начала:</strong> {start_time}</p><p><strong>Продолжительность:</strong> {duration} минут</p><p><strong>Организатор:</strong> {organizer_name}</p><p><strong>Описание:</strong> {meeting_description}</p><p><strong>Ссылка для подключения:</strong> <a href="{join_url}">{join_url}</a></p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Zoom Toplantı Daveti: {meeting_title}',
+                        'content' => '<h2>Zoom toplantısına davet edildiniz!</h2><p>Merhaba <strong>{member_name}</strong>,</p><p>"<strong>{meeting_title}</strong>" Zoom toplantısına katılmaya davet edildiniz.</p><p><strong>Toplantı:</strong> {meeting_title}</p><p><strong>Proje:</strong> {project_name}</p><p><strong>Başlangıç Saati:</strong> {start_time}</p><p><strong>Süre:</strong> {duration} dakika</p><p><strong>Düzenleyen:</strong> {organizer_name}</p><p><strong>Açıklama:</strong> {meeting_description}</p><p><strong>Katılım URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => 'Zoom会议邀请: {meeting_title}',
+                        'content' => '<h2>您被邀请参加Zoom会议！</h2><p>您好 <strong>{member_name}</strong>,</p><p>您被邀请参加Zoom会议 "<strong>{meeting_title}</strong>"。</p><p><strong>会议:</strong> {meeting_title}</p><p><strong>项目:</strong> {project_name}</p><p><strong>开始时间:</strong> {start_time}</p><p><strong>时长:</strong> {duration} 分钟</p><p><strong>组织者:</strong> {organizer_name}</p><p><strong>描述:</strong> {meeting_description}</p><p><strong>加入链接:</strong> <a href="{join_url}">{join_url}</a></p><p>此致敬礼,<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Google Meeting Notification',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'Google Meet Invitation: {meeting_title}',
+                        'content' => '<h2>You have been invited to a Google Meet!</h2><p>Hello <strong>{member_name}</strong>,</p><p>You have been invited to join the Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Project:</strong> {project_name}</p><p><strong>Start Time:</strong> {start_time}</p><p><strong>Duration:</strong> {duration} minutes</p><p><strong>Organizer:</strong> {organizer_name}</p><p><strong>Description:</strong> {meeting_description}</p><p><strong>Join URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Invitación a Google Meet: {meeting_title}',
+                        'content' => '<h2>¡Has sido invitado a Google Meet!</h2><p>Hola <strong>{member_name}</strong>,</p><p>Has sido invitado a unirte a Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Reunión:</strong> {meeting_title}</p><p><strong>Proyecto:</strong> {project_name}</p><p><strong>Hora de inicio:</strong> {start_time}</p><p><strong>Duración:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descripción:</strong> {meeting_description}</p><p><strong>URL de unión:</strong> <a href="{join_url}">{join_url}</a></p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'دعوة لـ Google Meet: {meeting_title}',
+                        'content' => '<h2>تمت دعوتك إلى Google Meet!</h2><p>مرحباً <strong>{member_name}</strong>،</p><p>تمت دعوتك للانضمام إلى Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>الاجتماع:</strong> {meeting_title}</p><p><strong>المشروع:</strong> {project_name}</p><p><strong>وقت البداية:</strong> {start_time}</p><p><strong>المدة:</strong> {duration} دقيقة</p><p><strong>المنظم:</strong> {organizer_name}</p><p><strong>الوصف:</strong> {meeting_description}</p><p><strong>رابط الانضمام:</strong> <a href="{join_url}">{join_url}</a></p><p>مع أطيب التحيات,<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'Google Meet invitation: {meeting_title}',
+                        'content' => '<h2>Du er blevet inviteret til Google Meet!</h2><p>Hej <strong>{member_name}</strong>,</p><p>Du er blevet inviteret til at deltage i Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Møde:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Starttid:</strong> {start_time}</p><p><strong>Varighed:</strong> {duration} minutter</p><p><strong>Arrangør:</strong> {organizer_name}</p><p><strong>Beskrivelse:</strong> {meeting_description}</p><p><strong>Deltag URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'Google Meet Einladung: {meeting_title}',
+                        'content' => '<h2>Sie wurden zu Google Meet eingeladen!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>Sie wurden eingeladen, an Google Meet "<strong>{meeting_title}</strong>" teilzunehmen.</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Startzeit:</strong> {start_time}</p><p><strong>Dauer:</strong> {duration} Minuten</p><p><strong>Organisator:</strong> {organizer_name}</p><p><strong>Beschreibung:</strong> {meeting_description}</p><p><strong>Beitritts-URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Invitation Google Meet : {meeting_title}',
+                        'content' => '<h2>Vous avez été invité à Google Meet !</h2><p>Bonjour <strong>{member_name}</strong>,</p><p>Vous avez été invité à rejoindre Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Réunion :</strong> {meeting_title}</p><p><strong>Projet :</strong> {project_name}</p><p><strong>Heure de début :</strong> {start_time}</p><p><strong>Durée :</strong> {duration} minutes</p><p><strong>Organisateur :</strong> {organizer_name}</p><p><strong>Description :</strong> {meeting_description}</p><p><strong>URL de participation :</strong> <a href="{join_url}">{join_url}</a></p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'הזמנה ל-Google Meet: {meeting_title}',
+                        'content' => '<h2>הוזמנת ל-Google Meet!</h2><p>שלום <strong>{member_name}</strong>,</p><p>הוזמנת להצטרף ל-Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>פגישה:</strong> {meeting_title}</p><p><strong>פרויקט:</strong> {project_name}</p><p><strong>שעת התחלה:</strong> {start_time}</p><p><strong>משך:</strong> {duration} דקות</p><p><strong>מארגן:</strong> {organizer_name}</p><p><strong>תיאור:</strong> {meeting_description}</p><p><strong>קישור הצטרפות:</strong> <a href="{join_url}">{join_url}</a></p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Invito Google Meet: {meeting_title}',
+                        'content' => '<h2>Sei stato invitato a Google Meet!</h2><p>Ciao <strong>{member_name}</strong>,</p><p>Sei stato invitato a partecipare a Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Riunione:</strong> {meeting_title}</p><p><strong>Progetto:</strong> {project_name}</p><p><strong>Ora di inizio:</strong> {start_time}</p><p><strong>Durata:</strong> {duration} minuti</p><p><strong>Organizzatore:</strong> {organizer_name}</p><p><strong>Descrizione:</strong> {meeting_description}</p><p><strong>URL di partecipazione:</strong> <a href="{join_url}">{join_url}</a></p><p>Cordiali saluti,<br><strong>Il team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => 'Google Meet への招待: {meeting_title}',
+                        'content' => '<h2>Google Meet に招待されました！</h2><p>こんにちは <strong>{member_name}</strong> さん、</p><p>Google Meet "<strong>{meeting_title}</strong>" に招待されました。</p><p><strong>会議:</strong> {meeting_title}</p><p><strong>プロジェクト:</strong> {project_name}</p><p><strong>開始時間:</strong> {start_time}</p><p><strong>時間:</strong> {duration} 分</p><p><strong>主催者:</strong> {organizer_name}</p><p><strong>説明:</strong> {meeting_description}</p><p><strong>参加URL:</strong> <a href="{join_url}">{join_url}</a></p><p>よろしくお願いします,<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'Google Meet uitnodiging: {meeting_title}',
+                        'content' => '<h2>Je bent uitgenodigd voor Google Meet!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>Je bent uitgenodigd om deel te nemen aan Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Meeting:</strong> {meeting_title}</p><p><strong>Project:</strong> {project_name}</p><p><strong>Starttijd:</strong> {start_time}</p><p><strong>Duur:</strong> {duration} minuten</p><p><strong>Organisator:</strong> {organizer_name}</p><p><strong>Beschrijving:</strong> {meeting_description}</p><p><strong>Deelname URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Met vriendelijke groet,<br><strong>{app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Zaproszenie na Google Meet: {meeting_title}',
+                        'content' => '<h2>Zostałeś zaproszony na Google Meet!</h2><p>Cześć <strong>{member_name}</strong>,</p><p>Zostałeś zaproszony do udziału w Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Spotkanie:</strong> {meeting_title}</p><p><strong>Projekt:</strong> {project_name}</p><p><strong>Czas rozpoczęcia:</strong> {start_time}</p><p><strong>Czas trwania:</strong> {duration} minut</p><p><strong>Organizator:</strong> {organizer_name}</p><p><strong>Opis:</strong> {meeting_description}</p><p><strong>URL dołączenia:</strong> <a href="{join_url}">{join_url}</a></p><p>Z poważaniem,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Convite para Google Meet: {meeting_title}',
+                        'content' => '<h2>Você foi convidado para Google Meet!</h2><p>Olá <strong>{member_name}</strong>,</p><p>Você foi convidado para participar do Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Reunião:</strong> {meeting_title}</p><p><strong>Projeto:</strong> {project_name}</p><p><strong>Horário de início:</strong> {start_time}</p><p><strong>Duração:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descrição:</strong> {meeting_description}</p><p><strong>URL de participação:</strong> <a href="{join_url}">{join_url}</a></p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Convite para Google Meet: {meeting_title}',
+                        'content' => '<h2>Você foi convidado para Google Meet!</h2><p>Olá <strong>{member_name}</strong>,</p><p>Você foi convidado para participar do Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Reunião:</strong> {meeting_title}</p><p><strong>Projeto:</strong> {project_name}</p><p><strong>Horário de início:</strong> {start_time}</p><p><strong>Duração:</strong> {duration} minutos</p><p><strong>Organizador:</strong> {organizer_name}</p><p><strong>Descrição:</strong> {meeting_description}</p><p><strong>URL de participação:</strong> <a href="{join_url}">{join_url}</a></p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Приглашение на Google Meet: {meeting_title}',
+                        'content' => '<h2>Вас пригласили на Google Meet!</h2><p>Здравствуйте <strong>{member_name}</strong>,</p><p>Вас пригласили присоединиться к Google Meet "<strong>{meeting_title}</strong>".</p><p><strong>Встреча:</strong> {meeting_title}</p><p><strong>Проект:</strong> {project_name}</p><p><strong>Время начала:</strong> {start_time}</p><p><strong>Продолжительность:</strong> {duration} минут</p><p><strong>Организатор:</strong> {organizer_name}</p><p><strong>Описание:</strong> {meeting_description}</p><p><strong>Ссылка для подключения:</strong> <a href="{join_url}">{join_url}</a></p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Google Meet Daveti: {meeting_title}',
+                        'content' => '<h2>Google Meet\'e davet edildiniz!</h2><p>Merhaba <strong>{member_name}</strong>,</p><p>"<strong>{meeting_title}</strong>" Google Meet toplantısına katılmaya davet edildiniz.</p><p><strong>Toplantı:</strong> {meeting_title}</p><p><strong>Proje:</strong> {project_name}</p><p><strong>Başlangıç Saati:</strong> {start_time}</p><p><strong>Süre:</strong> {duration} dakika</p><p><strong>Düzenleyen:</strong> {organizer_name}</p><p><strong>Açıklama:</strong> {meeting_description}</p><p><strong>Katılım URL:</strong> <a href="{join_url}">{join_url}</a></p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => 'Google Meet 邀请: {meeting_title}',
+                        'content' => '<h2>您被邀请参加Google Meet！</h2><p>您好 <strong>{member_name}</strong>,</p><p>您被邀请参加Google Meet "<strong>{meeting_title}</strong>"。</p><p><strong>会议:</strong> {meeting_title}</p><p><strong>项目:</strong> {project_name}</p><p><strong>开始时间:</strong> {start_time}</p><p><strong>时长:</strong> {duration} 分钟</p><p><strong>组织者:</strong> {organizer_name}</p><p><strong>描述:</strong> {meeting_description}</p><p><strong>加入链接:</strong> <a href="{join_url}">{join_url}</a></p><p>此致敬礼,<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Todo Created',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'New ToDo Shared: {todo_title}',
+                        'content' => '<h2>You have been added to a ToDo!</h2><p>Hello <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> has shared a new ToDo with you in workspace <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Description:</strong> {todo_description}</p><p><strong>Priority:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Due Date:</strong> {due_date}</p><p><strong>Workspace:</strong> {workspace_name}</p><p>You can now view and track this ToDo in your workspace.</p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Nueva tarea compartida: {todo_title}',
+                        'content' => '<h2>¡Te han agregado a una tarea!</h2><p>Hola <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> ha compartido una nueva tarea contigo en el espacio de trabajo <strong>{workspace_name}</strong>.</p><p><strong>Tarea:</strong> {todo_title}</p><p><strong>Descripción:</strong> {todo_description}</p><p><strong>Prioridad:</strong> {todo_priority}</p><p><strong>Estado:</strong> {todo_status}</p><p><strong>Fecha límite:</strong> {due_date}</p><p><strong>Espacio de trabajo:</strong> {workspace_name}</p><p>Ahora puedes ver y seguir esta tarea en tu espacio de trabajo.</p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'مهمة جديدة مشتركة: {todo_title}',
+                        'content' => '<h2>تمت إضافتك إلى مهمة!</h2><p>مرحباً <strong>{member_name}</strong>،</p><p>قام <strong>{created_by_name}</strong> بمشاركة مهمة جديدة معك في مساحة العمل <strong>{workspace_name}</strong>.</p><p><strong>المهمة:</strong> {todo_title}</p><p><strong>الوصف:</strong> {todo_description}</p><p><strong>الأولوية:</strong> {todo_priority}</p><p><strong>الحالة:</strong> {todo_status}</p><p><strong>تاريخ الاستحقاق:</strong> {due_date}</p><p><strong>مساحة العمل:</strong> {workspace_name}</p><p>يمكنك الآن عرض وتتبع هذه المهمة في مساحة العمل الخاصة بك.</p><p>مع أطيب التحيات،<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'Ny ToDo delt: {todo_title}',
+                        'content' => '<h2>Du er blevet tilføjet til en ToDo!</h2><p>Hej <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> har delt en ny ToDo med dig i arbejdsområdet <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beskrivelse:</strong> {todo_description}</p><p><strong>Prioritet:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Forfaldsdato:</strong> {due_date}</p><p><strong>Arbejdsområde:</strong> {workspace_name}</p><p>Du kan nu se og spore denne ToDo i dit arbejdsområde.</p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'Neue ToDo geteilt: {todo_title}',
+                        'content' => '<h2>Sie wurden zu einer ToDo hinzugefügt!</h2><p>Hallo <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> hat eine neue ToDo mit Ihnen im Arbeitsbereich <strong>{workspace_name}</strong> geteilt.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beschreibung:</strong> {todo_description}</p><p><strong>Priorität:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Fälligkeitsdatum:</strong> {due_date}</p><p><strong>Arbeitsbereich:</strong> {workspace_name}</p><p>Sie können diese ToDo jetzt in Ihrem Arbeitsbereich anzeigen und verfolgen.</p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Nouvelle tâche partagée : {todo_title}',
+                        'content' => '<h2>Vous avez été ajouté à une tâche !</h2><p>Bonjour <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> a partagé une nouvelle tâche avec vous dans l\'espace de travail <strong>{workspace_name}</strong>.</p><p><strong>Tâche :</strong> {todo_title}</p><p><strong>Description :</strong> {todo_description}</p><p><strong>Priorité :</strong> {todo_priority}</p><p><strong>Statut :</strong> {todo_status}</p><p><strong>Date d\'échéance :</strong> {due_date}</p><p><strong>Espace de travail :</strong> {workspace_name}</p><p>Vous pouvez maintenant voir et suivre cette tâche dans votre espace de travail.</p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'משימה חדשה שותפה: {todo_title}',
+                        'content' => '<h2>נוספת למשימה!</h2><p>שלום <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> שיתף איתך משימה חדשה במרחב העבודה <strong>{workspace_name}</strong>.</p><p><strong>משימה:</strong> {todo_title}</p><p><strong>תיאור:</strong> {todo_description}</p><p><strong>עדיפות:</strong> {todo_priority}</p><p><strong>סטטוס:</strong> {todo_status}</p><p><strong>תאריך יעד:</strong> {due_date}</p><p><strong>מרחב עבודה:</strong> {workspace_name}</p><p>כעת תוכל לצפות ולעקוב אחר משימה זו במרחב העבודה שלך.</p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Nuova ToDo condivisa: {todo_title}',
+                        'content' => '<h2>Sei stato aggiunto a una ToDo!</h2><p>Ciao <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> ha condiviso una nuova ToDo con te nello spazio di lavoro <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Descrizione:</strong> {todo_description}</p><p><strong>Priorità:</strong> {todo_priority}</p><p><strong>Stato:</strong> {todo_status}</p><p><strong>Scadenza:</strong> {due_date}</p><p><strong>Spazio di lavoro:</strong> {workspace_name}</p><p>Ora puoi visualizzare e monitorare questa ToDo nel tuo spazio di lavoro.</p><p>Cordiali saluti,<br><strong>Il team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => '新しいToDoが共有されました: {todo_title}',
+                        'content' => '<h2>ToDoに追加されました！</h2><p>こんにちは <strong>{member_name}</strong> さん、</p><p><strong>{created_by_name}</strong> がワークスペース <strong>{workspace_name}</strong> で新しいToDoを共有しました。</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>説明:</strong> {todo_description}</p><p><strong>優先度:</strong> {todo_priority}</p><p><strong>ステータス:</strong> {todo_status}</p><p><strong>期限:</strong> {due_date}</p><p><strong>ワークスペース:</strong> {workspace_name}</p><p>ワークスペースでこのToDoを表示および追跡できるようになりました。</p><p>よろしくお願いします、<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'Nieuwe ToDo gedeeld: {todo_title}',
+                        'content' => '<h2>Je bent toegevoegd aan een ToDo!</h2><p>Hallo <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> heeft een nieuwe ToDo met je gedeeld in werkruimte <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beschrijving:</strong> {todo_description}</p><p><strong>Prioriteit:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Vervaldatum:</strong> {due_date}</p><p><strong>Werkruimte:</strong> {workspace_name}</p><p>Je kunt deze ToDo nu bekijken en volgen in je werkruimte.</p><p>Met vriendelijke groet,<br><strong>Het {app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Nowe zadanie udostępnione: {todo_title}',
+                        'content' => '<h2>Zostałeś dodany do zadania!</h2><p>Cześć <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> udostępnił Ci nowe zadanie w przestrzeni roboczej <strong>{workspace_name}</strong>.</p><p><strong>Zadanie:</strong> {todo_title}</p><p><strong>Opis:</strong> {todo_description}</p><p><strong>Priorytet:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Termin:</strong> {due_date}</p><p><strong>Przestrzeń robocza:</strong> {workspace_name}</p><p>Możesz teraz przeglądać i śledzić to zadanie w swojej przestrzeni roboczej.</p><p>Z poważaniem,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Nova tarefa compartilhada: {todo_title}',
+                        'content' => '<h2>Você foi adicionado a uma tarefa!</h2><p>Olá <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> compartilhou uma nova tarefa com você no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Descrição:</strong> {todo_description}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Agora você pode visualizar e acompanhar esta tarefa em seu espaço de trabalho.</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Nova tarefa compartilhada: {todo_title}',
+                        'content' => '<h2>Você foi adicionado a uma tarefa!</h2><p>Olá <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> compartilhou uma nova tarefa com você no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Descrição:</strong> {todo_description}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Agora você pode visualizar e acompanhar esta tarefa em seu espaço de trabalho.</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Новая задача: {todo_title}',
+                        'content' => '<h2>Вы добавлены к задаче!</h2><p>Здравствуйте <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> поделился с вами новой задачей в рабочем пространстве <strong>{workspace_name}</strong>.</p><p><strong>Задача:</strong> {todo_title}</p><p><strong>Описание:</strong> {todo_description}</p><p><strong>Приоритет:</strong> {todo_priority}</p><p><strong>Статус:</strong> {todo_status}</p><p><strong>Срок выполнения:</strong> {due_date}</p><p><strong>Рабочее пространство:</strong> {workspace_name}</p><p>Теперь вы можете просматривать и отслеживать эту задачу в своем рабочем пространстве.</p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Yeni görev paylaşıldı: {todo_title}',
+                        'content' => '<h2>Bir göreve eklendiniz!</h2><p>Merhaba <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> çalışma alanı <strong>{workspace_name}</strong> içinde sizinle yeni bir görev paylaştı.</p><p><strong>Görev:</strong> {todo_title}</p><p><strong>Açıklama:</strong> {todo_description}</p><p><strong>Öncelik:</strong> {todo_priority}</p><p><strong>Durum:</strong> {todo_status}</p><p><strong>Son tarih:</strong> {due_date}</p><p><strong>Çalışma alanı:</strong> {workspace_name}</p><p>Artık bu görevi çalışma alanınızda görüntüleyebilir ve takip edebilirsiniz.</p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => '新待办事项已共享: {todo_title}',
+                        'content' => '<h2>您已被添加到待办事项！</h2><p>您好 <strong>{member_name}</strong>，</p><p><strong>{created_by_name}</strong> 在工作区 <strong>{workspace_name}</strong> 中与您共享了一个新的待办事项。</p><p><strong>待办事项:</strong> {todo_title}</p><p><strong>描述:</strong> {todo_description}</p><p><strong>优先级:</strong> {todo_priority}</p><p><strong>状态:</strong> {todo_status}</p><p><strong>截止日期:</strong> {due_date}</p><p><strong>工作区:</strong> {workspace_name}</p><p>您现在可以在工作区中查看和跟踪此待办事项。</p><p>此致敬礼，<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Todo Status Updated',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'ToDo Status Updated: {todo_title}',
+                        'content' => '<h2>ToDo Status Has Been Updated!</h2><p>Hello <strong>{member_name}</strong>,</p><p>The status of ToDo "<strong>{todo_title}</strong>" has been updated in workspace <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Description:</strong> {todo_description}</p><p><strong>Priority:</strong> {todo_priority}</p><p><strong>Previous Status:</strong> {old_status}</p><p><strong>New Status:</strong> {new_status}</p><p><strong>Due Date:</strong> {due_date}</p><p><strong>Workspace:</strong> {workspace_name}</p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Estado de tarea actualizado: {todo_title}',
+                        'content' => '<h2>¡El estado de la tarea ha sido actualizado!</h2><p>Hola <strong>{member_name}</strong>,</p><p>El estado de la tarea "<strong>{todo_title}</strong>" ha sido actualizado en el espacio de trabajo <strong>{workspace_name}</strong>.</p><p><strong>Tarea:</strong> {todo_title}</p><p><strong>Descripción:</strong> {todo_description}</p><p><strong>Prioridad:</strong> {todo_priority}</p><p><strong>Estado anterior:</strong> {old_status}</p><p><strong>Nuevo estado:</strong> {new_status}</p><p><strong>Fecha límite:</strong> {due_date}</p><p><strong>Espacio de trabajo:</strong> {workspace_name}</p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'تم تحديث حالة المهمة: {todo_title}',
+                        'content' => '<h2>تم تحديث حالة المهمة!</h2><p>مرحباً <strong>{member_name}</strong>،</p><p>تم تحديث حالة المهمة "<strong>{todo_title}</strong>" في مساحة العمل <strong>{workspace_name}</strong>.</p><p><strong>المهمة:</strong> {todo_title}</p><p><strong>الوصف:</strong> {todo_description}</p><p><strong>الأولوية:</strong> {todo_priority}</p><p><strong>الحالة السابقة:</strong> {old_status}</p><p><strong>الحالة الجديدة:</strong> {new_status}</p><p><strong>تاريخ الاستحقاق:</strong> {due_date}</p><p><strong>مساحة العمل:</strong> {workspace_name}</p><p>مع أطيب التحيات،<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'ToDo status opdateret: {todo_title}',
+                        'content' => '<h2>ToDo status er blevet opdateret!</h2><p>Hej <strong>{member_name}</strong>,</p><p>Status for ToDo "<strong>{todo_title}</strong>" er blevet opdateret i arbejdsområdet <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beskrivelse:</strong> {todo_description}</p><p><strong>Prioritet:</strong> {todo_priority}</p><p><strong>Tidligere status:</strong> {old_status}</p><p><strong>Ny status:</strong> {new_status}</p><p><strong>Forfaldsdato:</strong> {due_date}</p><p><strong>Arbejdsområde:</strong> {workspace_name}</p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'ToDo Status aktualisiert: {todo_title}',
+                        'content' => '<h2>ToDo Status wurde aktualisiert!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>Der Status der ToDo "<strong>{todo_title}</strong>" wurde im Arbeitsbereich <strong>{workspace_name}</strong> aktualisiert.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beschreibung:</strong> {todo_description}</p><p><strong>Priorität:</strong> {todo_priority}</p><p><strong>Vorheriger Status:</strong> {old_status}</p><p><strong>Neuer Status:</strong> {new_status}</p><p><strong>Fälligkeitsdatum:</strong> {due_date}</p><p><strong>Arbeitsbereich:</strong> {workspace_name}</p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Statut de tâche mis à jour : {todo_title}',
+                        'content' => '<h2>Le statut de la tâche a été mis à jour !</h2><p>Bonjour <strong>{member_name}</strong>,</p><p>Le statut de la tâche "<strong>{todo_title}</strong>" a été mis à jour dans l\'espace de travail <strong>{workspace_name}</strong>.</p><p><strong>Tâche :</strong> {todo_title}</p><p><strong>Description :</strong> {todo_description}</p><p><strong>Priorité :</strong> {todo_priority}</p><p><strong>Statut précédent :</strong> {old_status}</p><p><strong>Nouveau statut :</strong> {new_status}</p><p><strong>Date d\'échéance :</strong> {due_date}</p><p><strong>Espace de travail :</strong> {workspace_name}</p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'סטטוס המשימה עודכן: {todo_title}',
+                        'content' => '<h2>סטטוס המשימה עודכן!</h2><p>שלום <strong>{member_name}</strong>,</p><p>הסטטוס של המשימה "<strong>{todo_title}</strong>" עודכן במרחב העבודה <strong>{workspace_name}</strong>.</p><p><strong>משימה:</strong> {todo_title}</p><p><strong>תיאור:</strong> {todo_description}</p><p><strong>עדיפות:</strong> {todo_priority}</p><p><strong>סטטוס קודם:</strong> {old_status}</p><p><strong>סטטוס חדש:</strong> {new_status}</p><p><strong>תאריך יעד:</strong> {due_date}</p><p><strong>מרחב עבודה:</strong> {workspace_name}</p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Stato ToDo aggiornato: {todo_title}',
+                        'content' => '<h2>Lo stato della ToDo è stato aggiornato!</h2><p>Ciao <strong>{member_name}</strong>,</p><p>Lo stato della ToDo "<strong>{todo_title}</strong>" è stato aggiornato nello spazio di lavoro <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Descrizione:</strong> {todo_description}</p><p><strong>Priorità:</strong> {todo_priority}</p><p><strong>Stato precedente:</strong> {old_status}</p><p><strong>Nuovo stato:</strong> {new_status}</p><p><strong>Scadenza:</strong> {due_date}</p><p><strong>Spazio di lavoro:</strong> {workspace_name}</p><p>Cordiali saluti,<br><strong>Il team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => 'ToDoステータスが更新されました: {todo_title}',
+                        'content' => '<h2>ToDoのステータスが更新されました！</h2><p>こんにちは <strong>{member_name}</strong> さん、</p><p>ワークスペース <strong>{workspace_name}</strong> でToDo "<strong>{todo_title}</strong>" のステータスが更新されました。</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>説明:</strong> {todo_description}</p><p><strong>優先度:</strong> {todo_priority}</p><p><strong>以前のステータス:</strong> {old_status}</p><p><strong>新しいステータス:</strong> {new_status}</p><p><strong>期限:</strong> {due_date}</p><p><strong>ワークスペース:</strong> {workspace_name}</p><p>よろしくお願いします、<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'ToDo status bijgewerkt: {todo_title}',
+                        'content' => '<h2>ToDo status is bijgewerkt!</h2><p>Hallo <strong>{member_name}</strong>,</p><p>De status van ToDo "<strong>{todo_title}</strong>" is bijgewerkt in werkruimte <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Beschrijving:</strong> {todo_description}</p><p><strong>Prioriteit:</strong> {todo_priority}</p><p><strong>Vorige status:</strong> {old_status}</p><p><strong>Nieuwe status:</strong> {new_status}</p><p><strong>Vervaldatum:</strong> {due_date}</p><p><strong>Werkruimte:</strong> {workspace_name}</p><p>Met vriendelijke groet,<br><strong>Het {app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Status zadania zaktualizowany: {todo_title}',
+                        'content' => '<h2>Status zadania został zaktualizowany!</h2><p>Cześć <strong>{member_name}</strong>,</p><p>Status zadania "<strong>{todo_title}</strong>" został zaktualizowany w przestrzeni roboczej <strong>{workspace_name}</strong>.</p><p><strong>Zadanie:</strong> {todo_title}</p><p><strong>Opis:</strong> {todo_description}</p><p><strong>Priorytet:</strong> {todo_priority}</p><p><strong>Poprzedni status:</strong> {old_status}</p><p><strong>Nowy status:</strong> {new_status}</p><p><strong>Termin:</strong> {due_date}</p><p><strong>Przestrzeń robocza:</strong> {workspace_name}</p><p>Z poważaniem,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Status da tarefa atualizado: {todo_title}',
+                        'content' => '<h2>O status da tarefa foi atualizado!</h2><p>Olá <strong>{member_name}</strong>,</p><p>O status da tarefa "<strong>{todo_title}</strong>" foi atualizado no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Descrição:</strong> {todo_description}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status anterior:</strong> {old_status}</p><p><strong>Novo status:</strong> {new_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Status da tarefa atualizado: {todo_title}',
+                        'content' => '<h2>O status da tarefa foi atualizado!</h2><p>Olá <strong>{member_name}</strong>,</p><p>O status da tarefa "<strong>{todo_title}</strong>" foi atualizado no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Descrição:</strong> {todo_description}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status anterior:</strong> {old_status}</p><p><strong>Novo status:</strong> {new_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Статус задачи обновлен: {todo_title}',
+                        'content' => '<h2>Статус задачи обновлен!</h2><p>Здравствуйте <strong>{member_name}</strong>,</p><p>Статус задачи "<strong>{todo_title}</strong>" был обновлен в рабочем пространстве <strong>{workspace_name}</strong>.</p><p><strong>Задача:</strong> {todo_title}</p><p><strong>Описание:</strong> {todo_description}</p><p><strong>Приоритет:</strong> {todo_priority}</p><p><strong>Предыдущий статус:</strong> {old_status}</p><p><strong>Новый статус:</strong> {new_status}</p><p><strong>Срок выполнения:</strong> {due_date}</p><p><strong>Рабочее пространство:</strong> {workspace_name}</p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Görev durumu güncellendi: {todo_title}',
+                        'content' => '<h2>Görev durumu güncellendi!</h2><p>Merhaba <strong>{member_name}</strong>,</p><p>"<strong>{todo_title}</strong>" görevinin durumu <strong>{workspace_name}</strong> çalışma alanında güncellendi.</p><p><strong>Görev:</strong> {todo_title}</p><p><strong>Açıklama:</strong> {todo_description}</p><p><strong>Öncelik:</strong> {todo_priority}</p><p><strong>Önceki durum:</strong> {old_status}</p><p><strong>Yeni durum:</strong> {new_status}</p><p><strong>Son tarih:</strong> {due_date}</p><p><strong>Çalışma alanı:</strong> {workspace_name}</p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => '待办事项状态已更新: {todo_title}',
+                        'content' => '<h2>待办事项状态已更新！</h2><p>您好 <strong>{member_name}</strong>，</p><p>待办事项 "<strong>{todo_title}</strong>" 的状态已在工作区 <strong>{workspace_name}</strong> 中更新。</p><p><strong>待办事项:</strong> {todo_title}</p><p><strong>描述:</strong> {todo_description}</p><p><strong>优先级:</strong> {todo_priority}</p><p><strong>之前状态:</strong> {old_status}</p><p><strong>新状态:</strong> {new_status}</p><p><strong>截止日期:</strong> {due_date}</p><p><strong>工作区:</strong> {workspace_name}</p><p>此致敬礼，<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Todo Comments Added',
+                'from' => 'Support Team',
+                'translations' => [
+                    'en' => [
+                        'subject' => 'New Comment/Attachment on ToDo: {todo_title}',
+                        'content' => '<h2>New Activity on Your ToDo!</h2><p>Hello <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> has added a new {activity_type} to the ToDo "<strong>{todo_title}</strong>" in workspace <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Priority:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Due Date:</strong> {due_date}</p><p><strong>Activity:</strong> {activity_type}</p><p><strong>Workspace:</strong> {workspace_name}</p><p>You can view the full details and respond in your workspace.</p><p>Best regards,<br><strong>The {app_name} Team</strong></p>'
+                    ],
+                    'es' => [
+                        'subject' => 'Nuevo comentario/adjunto en la tarea: {todo_title}',
+                        'content' => '<h2>¡Nueva actividad en tu tarea!</h2><p>Hola <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> ha agregado un nuevo {activity_type} a la tarea "<strong>{todo_title}</strong>" en el espacio de trabajo <strong>{workspace_name}</strong>.</p><p><strong>Tarea:</strong> {todo_title}</p><p><strong>Prioridad:</strong> {todo_priority}</p><p><strong>Estado:</strong> {todo_status}</p><p><strong>Fecha límite:</strong> {due_date}</p><p><strong>Actividad:</strong> {activity_type}</p><p><strong>Espacio de trabajo:</strong> {workspace_name}</p><p>Puedes ver los detalles completos y responder en tu espacio de trabajo.</p><p>Saludos cordiales,<br><strong>El equipo de {app_name}</strong></p>'
+                    ],
+                    'ar' => [
+                        'subject' => 'تعليق/مرفق جديد على المهمة: {todo_title}',
+                        'content' => '<h2>نشاط جديد على مهمتك!</h2><p>مرحباً <strong>{member_name}</strong>،</p><p>قام <strong>{created_by_name}</strong> بإضافة {activity_type} جديد إلى المهمة "<strong>{todo_title}</strong>" في مساحة العمل <strong>{workspace_name}</strong>.</p><p><strong>المهمة:</strong> {todo_title}</p><p><strong>الأولوية:</strong> {todo_priority}</p><p><strong>الحالة:</strong> {todo_status}</p><p><strong>تاريخ الاستحقاق:</strong> {due_date}</p><p><strong>النشاط:</strong> {activity_type}</p><p><strong>مساحة العمل:</strong> {workspace_name}</p><p>يمكنك عرض التفاصيل الكاملة والرد في مساحة العمل الخاصة بك.</p><p>مع أطيب التحيات،<br><strong>فريق {app_name}</strong></p>'
+                    ],
+                    'da' => [
+                        'subject' => 'Ny kommentar/vedhæftning på opgave: {todo_title}',
+                        'content' => '<h2>Ny aktivitet på din opgave!</h2><p>Hej <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> har tilføjet en ny {activity_type} til opgaven "<strong>{todo_title}</strong>" i arbejdsområdet <strong>{workspace_name}</strong>.</p><p><strong>Opgave:</strong> {todo_title}</p><p><strong>Prioritet:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Forfaldsdato:</strong> {due_date}</p><p><strong>Aktivitet:</strong> {activity_type}</p><p><strong>Arbejdsområde:</strong> {workspace_name}</p><p>Du kan se de fulde detaljer og svare i dit arbejdsområde.</p><p>Venlig hilsen,<br><strong>{app_name} Teamet</strong></p>'
+                    ],
+                    'de' => [
+                        'subject' => 'Neuer Kommentar/Anhang bei Aufgabe: {todo_title}',
+                        'content' => '<h2>Neue Aktivität bei Ihrer Aufgabe!</h2><p>Hallo <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> hat einen neuen {activity_type} zur Aufgabe "<strong>{todo_title}</strong>" im Arbeitsbereich <strong>{workspace_name}</strong> hinzugefügt.</p><p><strong>Aufgabe:</strong> {todo_title}</p><p><strong>Priorität:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Fälligkeitsdatum:</strong> {due_date}</p><p><strong>Aktivität:</strong> {activity_type}</p><p><strong>Arbeitsbereich:</strong> {workspace_name}</p><p>Sie können die vollständigen Details anzeigen und in Ihrem Arbeitsbereich antworten.</p><p>Mit freundlichen Grüßen,<br><strong>Das {app_name} Team</strong></p>'
+                    ],
+                    'fr' => [
+                        'subject' => 'Nouveau commentaire/pièce jointe sur la tâche : {todo_title}',
+                        'content' => '<h2>Nouvelle activité sur votre tâche !</h2><p>Bonjour <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> a ajouté un nouveau {activity_type} à la tâche "<strong>{todo_title}</strong>" dans l\'espace de travail <strong>{workspace_name}</strong>.</p><p><strong>Tâche :</strong> {todo_title}</p><p><strong>Priorité :</strong> {todo_priority}</p><p><strong>Statut :</strong> {todo_status}</p><p><strong>Date d\'échéance :</strong> {due_date}</p><p><strong>Activité :</strong> {activity_type}</p><p><strong>Espace de travail :</strong> {workspace_name}</p><p>Vous pouvez voir les détails complets et répondre dans votre espace de travail.</p><p>Cordialement,<br><strong>L\'équipe {app_name}</strong></p>'
+                    ],
+                    'he' => [
+                        'subject' => 'תגובה/קובץ מצורף חדש במשימה: {todo_title}',
+                        'content' => '<h2>פעילות חדשה במשימה שלך!</h2><p>שלום <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> הוסיף {activity_type} חדש למשימה "<strong>{todo_title}</strong>" במרחב העבודה <strong>{workspace_name}</strong>.</p><p><strong>משימה:</strong> {todo_title}</p><p><strong>עדיפות:</strong> {todo_priority}</p><p><strong>סטטוס:</strong> {todo_status}</p><p><strong>תאריך יעד:</strong> {due_date}</p><p><strong>פעילות:</strong> {activity_type}</p><p><strong>מרחב עבודה:</strong> {workspace_name}</p><p>ניתן לצפות בפרטים המלאים ולהגיב במרחב העבודה שלך.</p><p>בברכה,<br><strong>צוות {app_name}</strong></p>'
+                    ],
+                    'it' => [
+                        'subject' => 'Nuovo commento/allegato su ToDo: {todo_title}',
+                        'content' => '<h2>Nuova attività sulla tua ToDo!</h2><p>Ciao <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> ha aggiunto un nuovo {activity_type} alla ToDo "<strong>{todo_title}</strong>" nello spazio di lavoro <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Priorità:</strong> {todo_priority}</p><p><strong>Stato:</strong> {todo_status}</p><p><strong>Scadenza:</strong> {due_date}</p><p><strong>Attività:</strong> {activity_type}</p><p><strong>Spazio di lavoro:</strong> {workspace_name}</p><p>Puoi visualizzare i dettagli completi e rispondere nel tuo spazio di lavoro.</p><p>Cordiali saluti,<br><strong>Il team {app_name}</strong></p>'
+                    ],
+                    'ja' => [
+                        'subject' => 'ToDoに新しいコメント/添付ファイル: {todo_title}',
+                        'content' => '<h2>ToDoに新しいアクティビティがあります！</h2><p>こんにちは <strong>{member_name}</strong> さん、</p><p>ワークスペース <strong>{workspace_name}</strong> で <strong>{created_by_name}</strong> がToDo "<strong>{todo_title}</strong>" に新しい{activity_type}を追加しました。</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>優先度:</strong> {todo_priority}</p><p><strong>ステータス:</strong> {todo_status}</p><p><strong>期限:</strong> {due_date}</p><p><strong>アクティビティ:</strong> {activity_type}</p><p><strong>ワークスペース:</strong> {workspace_name}</p><p>ワークスペースで詳細を確認し、返信できます。</p><p>よろしくお願いします、<br><strong>{app_name} チーム</strong></p>'
+                    ],
+                    'nl' => [
+                        'subject' => 'Nieuwe opmerking/bijlage op ToDo: {todo_title}',
+                        'content' => '<h2>Nieuwe activiteit op je ToDo!</h2><p>Hallo <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> heeft een nieuwe {activity_type} toegevoegd aan de ToDo "<strong>{todo_title}</strong>" in werkruimte <strong>{workspace_name}</strong>.</p><p><strong>ToDo:</strong> {todo_title}</p><p><strong>Prioriteit:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Vervaldatum:</strong> {due_date}</p><p><strong>Activiteit:</strong> {activity_type}</p><p><strong>Werkruimte:</strong> {workspace_name}</p><p>Je kunt de volledige details bekijken en reageren in je werkruimte.</p><p>Met vriendelijke groet,<br><strong>Het {app_name} Team</strong></p>'
+                    ],
+                    'pl' => [
+                        'subject' => 'Nowy komentarz/załącznik w zadaniu: {todo_title}',
+                        'content' => '<h2>Nowa aktywność w Twoim zadaniu!</h2><p>Cześć <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> dodał nowy {activity_type} do zadania "<strong>{todo_title}</strong>" w przestrzeni roboczej <strong>{workspace_name}</strong>.</p><p><strong>Zadanie:</strong> {todo_title}</p><p><strong>Priorytet:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Termin:</strong> {due_date}</p><p><strong>Aktywność:</strong> {activity_type}</p><p><strong>Przestrzeń robocza:</strong> {workspace_name}</p><p>Możesz zobaczyć pełne szczegóły i odpowiedzieć w swojej przestrzeni roboczej.</p><p>Z poważaniem,<br><strong>Zespół {app_name}</strong></p>'
+                    ],
+                    'pt' => [
+                        'subject' => 'Novo comentário/anexo na tarefa: {todo_title}',
+                        'content' => '<h2>Nova atividade na sua tarefa!</h2><p>Olá <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> adicionou um novo {activity_type} à tarefa "<strong>{todo_title}</strong>" no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Atividade:</strong> {activity_type}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Você pode ver os detalhes completos e responder no seu espaço de trabalho.</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'pt-BR' => [
+                        'subject' => 'Novo comentário/anexo na tarefa: {todo_title}',
+                        'content' => '<h2>Nova atividade na sua tarefa!</h2><p>Olá <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> adicionou um novo {activity_type} à tarefa "<strong>{todo_title}</strong>" no espaço de trabalho <strong>{workspace_name}</strong>.</p><p><strong>Tarefa:</strong> {todo_title}</p><p><strong>Prioridade:</strong> {todo_priority}</p><p><strong>Status:</strong> {todo_status}</p><p><strong>Data de vencimento:</strong> {due_date}</p><p><strong>Atividade:</strong> {activity_type}</p><p><strong>Espaço de trabalho:</strong> {workspace_name}</p><p>Você pode ver os detalhes completos e responder no seu espaço de trabalho.</p><p>Atenciosamente,<br><strong>Equipe {app_name}</strong></p>'
+                    ],
+                    'ru' => [
+                        'subject' => 'Новый комментарий/вложение в задаче: {todo_title}',
+                        'content' => '<h2>Новая активность в вашей задаче!</h2><p>Здравствуйте <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> добавил новый {activity_type} к задаче "<strong>{todo_title}</strong>" в рабочем пространстве <strong>{workspace_name}</strong>.</p><p><strong>Задача:</strong> {todo_title}</p><p><strong>Приоритет:</strong> {todo_priority}</p><p><strong>Статус:</strong> {todo_status}</p><p><strong>Срок выполнения:</strong> {due_date}</p><p><strong>Активность:</strong> {activity_type}</p><p><strong>Рабочее пространство:</strong> {workspace_name}</p><p>Вы можете просмотреть полные детали и ответить в своем рабочем пространстве.</p><p>С уважением,<br><strong>Команда {app_name}</strong></p>'
+                    ],
+                    'tr' => [
+                        'subject' => 'Görevde yeni yorum/ek: {todo_title}',
+                        'content' => '<h2>Görevinizde yeni aktivite!</h2><p>Merhaba <strong>{member_name}</strong>,</p><p><strong>{created_by_name}</strong> çalışma alanı <strong>{workspace_name}</strong> içinde "<strong>{todo_title}</strong>" görevine yeni bir {activity_type} ekledi.</p><p><strong>Görev:</strong> {todo_title}</p><p><strong>Öncelik:</strong> {todo_priority}</p><p><strong>Durum:</strong> {todo_status}</p><p><strong>Son tarih:</strong> {due_date}</p><p><strong>Aktivite:</strong> {activity_type}</p><p><strong>Çalışma alanı:</strong> {workspace_name}</p><p>Tüm detayları görüntüleyebilir ve çalışma alanınızda yanıtlayabilirsiniz.</p><p>Saygılarımızla,<br><strong>{app_name} Ekibi</strong></p>'
+                    ],
+                    'zh' => [
+                        'subject' => '待办事项新评论/附件: {todo_title}',
+                        'content' => '<h2>您的待办事项有新活动！</h2><p>您好 <strong>{member_name}</strong>，</p><p><strong>{created_by_name}</strong> 在工作区 <strong>{workspace_name}</strong> 的待办事项 "<strong>{todo_title}</strong>" 中添加了新的{activity_type}。</p><p><strong>待办事项:</strong> {todo_title}</p><p><strong>优先级:</strong> {todo_priority}</p><p><strong>状态:</strong> {todo_status}</p><p><strong>截止日期:</strong> {due_date}</p><p><strong>活动:</strong> {activity_type}</p><p><strong>工作区:</strong> {workspace_name}</p><p>您可以在工作区中查看完整详细信息并回复。</p><p>此致敬礼，<br><strong>{app_name} 团队</strong></p>'
+                    ]
+                ]
             ]
         ];
 
@@ -454,11 +874,34 @@ class EmailTemplateSeeder extends Seeder
                 ]);
             }
 
-            UserEmailTemplate::updateOrCreate([
-                'template_id' => $template->id,
-                'user_id' => auth()->id() ?? 1,
-                'is_active' => false
-            ]);
+        }
+
+        // Enable "Workspace Invitation" notification for all existing users
+        $this->enableWorkspaceInvitationForExistingUsers();
+    }
+
+    /**
+     * Enable "Workspace Invitation" email notification for all existing users
+     */
+    private function enableWorkspaceInvitationForExistingUsers(): void
+    {
+        $template = EmailTemplate::where('name', 'Workspace Invitation')->first();
+        
+        if ($template) {
+            $users = \App\Models\User::with('workspaces')->get();
+            
+            foreach ($users as $user) {
+                foreach ($user->workspaces as $workspace) {
+                    UserEmailTemplate::updateOrCreate(
+                        [
+                            'user_id' => $user->id,
+                            'template_id' => $template->id,
+                            'workspace_id' => $workspace->id
+                        ],
+                        ['is_active' => true]
+                    );
+                }
+            }
         }
     }
 }

@@ -190,4 +190,270 @@ class PayTabsPaymentController extends Controller
         // No fallback - only assign plan with proper payment verification
         return redirect()->route('plans.index')->with('error', __('Payment verification failed.'));
     }
+
+    public function createInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+            
+            // Get user-specific payment settings
+            $settings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['paytabs_profile_id']) || !isset($settings['paytabs_server_key']) || $settings['is_paytabs_enabled'] !== '1') {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('PayTabs not configured')
+                ], 400);
+            }
+
+            $cartId = 'invoice_' . $invoice->id . '_' . $request->amount . '_' . time();
+            $region = $settings['paytabs_region'] === 'GLO' ? 'GLOBAL' : $settings['paytabs_region'];
+
+            // Force PayTabs configuration
+            config([
+                'paytabs.profile_id' => $settings['paytabs_profile_id'],
+                'paytabs.server_key' => $settings['paytabs_server_key'],
+                'paytabs.region' => $region,
+                'paytabs.currency' => 'INR'
+            ]);
+
+            $pay = paypage::sendPaymentCode('all')
+                ->sendTransaction('sale', 'ecom')
+                ->sendCart($cartId, $request->amount, "Invoice Payment - {$invoice->invoice_number}")
+                ->sendCustomerDetails(
+                    $invoice->client->name ?? 'Customer',
+                    $invoice->client->email ?? 'customer@example.com',
+                    $invoice->client->phone ?? '1234567890',
+                    'Address',
+                    'City',
+                    'State',
+                    'US',
+                    '12345',
+                    request()->ip()
+                )
+                ->sendURLs(
+                    route('paytabs.invoice.success') . '?cart_id=' . $cartId,
+                    route('paytabs.invoice.callback')
+                )
+                ->sendLanguage('en')
+                ->sendFramed(false)
+                ->create_pay_page();
+
+            if ($pay && method_exists($pay, 'getTargetUrl')) {
+                $redirectUrl = $pay->getTargetUrl();
+
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $redirectUrl
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => __('Payment initialization failed')
+            ], 400);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => __('Payment processing failed')
+            ], 500);
+        }
+    }
+
+    public function invoiceSuccess(Request $request)
+    {
+        try {
+            $cartId = $request->input('cart_id');
+
+            if ($cartId) {
+                $parts = explode('_', $cartId);
+                if (count($parts) >= 3 && $parts[0] === 'invoice') {
+                    $invoiceId = $parts[1];
+                    $paymentAmount = $parts[2]; // Extract amount from cart_id
+                    $invoice = \App\Models\Invoice::find($invoiceId);
+
+                    if ($invoice) {
+                        // Check if payment already exists to prevent duplicates
+                        $existingPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
+                            ->where('transaction_id', $cartId)
+                            ->first();
+                            
+                        if (!$existingPayment) {
+                            $invoice->createPaymentRecord((float)$paymentAmount, 'paytabs', $cartId);
+                        }
+
+                        return redirect()->route('invoices.show', $invoice->id)
+                            ->with('success', __('Payment completed successfully!'));
+                    }
+                }
+            }
+            return redirect()->route('invoices.index')
+                ->with('error', __('Payment verification failed'));
+
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.index')
+                ->with('error', __('Payment processing failed'));
+        }
+    }
+
+    public function invoiceCallback(Request $request)
+    {
+        try {
+            $cartId = $request->input('cartId') ?? $request->input('cart_id');
+            $respStatus = $request->input('respStatus') ?? $request->input('resp_status');
+            $tranRef = $request->input('tranRef') ?? $request->input('tran_ref');
+
+            if ($cartId && $respStatus === 'A') {
+                $parts = explode('_', $cartId);
+                if (count($parts) >= 3 && $parts[0] === 'invoice') {
+                    $invoiceId = $parts[1];
+                    $paymentAmount = $parts[2];
+                    $invoice = \App\Models\Invoice::find($invoiceId);
+
+                    if ($invoice) {
+                        // Check if payment already exists to prevent duplicates
+                        $paymentId = $tranRef ?? $cartId;
+                        $existingPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
+                            ->where('transaction_id', $paymentId)
+                            ->first();
+                            
+                        if (!$existingPayment) {
+                            $invoice->createPaymentRecord((float)$paymentAmount, 'paytabs', $paymentId);
+                        }
+                    }
+                }
+            }
+
+            return response('OK', 200);
+        } catch (\Exception $e) {
+            return response('ERROR', 500);
+        }
+    }
+
+    public function createInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+            
+            $superAdmin = User::where('type', 'superadmin')->first();
+            $settings = getPaymentMethodConfig('paytabs', $superAdmin->id);
+
+            if (!isset($settings['profile_id']) || !isset($settings['server_key'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('PayTabs not configured')
+                ], 400);
+            }
+
+            $amount = $request->input('amount');
+            $cartId = 'invoice_' . $invoice->id . '_' . $amount . '_link_' . time();
+            $region = ($settings['region'] ?? 'SA') === 'GLO' ? 'GLOBAL' : ($settings['region'] ?? 'SA');
+
+            config([
+                'paytabs.profile_id' => $settings['profile_id'],
+                'paytabs.server_key' => $settings['server_key'],
+                'paytabs.region' => $region,
+                'paytabs.currency' => 'INR'
+            ]);
+
+            $pay = paypage::sendPaymentCode('all')
+                ->sendTransaction('sale', 'ecom')
+                ->sendCart($cartId, $amount, "Invoice Payment - {$invoice->invoice_number}")
+                ->sendCustomerDetails(
+                    $invoice->client->name ?? 'Customer',
+                    $invoice->client->email ?? 'customer@example.com',
+                    $invoice->client->phone ?? '1234567890',
+                    'Address',
+                    'City',
+                    'State',
+                    'US',
+                    '12345',
+                    request()->ip()
+                )
+                ->sendURLs(
+                    route('paytabs.invoice.success.from-link', $token) . '?amount=' . $amount,
+                    route('paytabs.invoice.callback.from-link')
+                )
+                ->sendLanguage('en')
+                ->sendFramed(false)
+                ->create_pay_page();
+
+            if ($pay && method_exists($pay, 'getTargetUrl')) {
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $pay->getTargetUrl()
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => __('Payment initialization failed')
+            ], 400);
+
+        } catch (\Exception $e) {
+            Log::error('PayTabs invoice payment error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => __('Payment processing failed')
+            ], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+        $amount = $request->input('amount', $invoice->total);
+        $cartId = 'invoice_' . $invoice->id . '_' . $amount . '_link_' . time();
+
+        $invoice->createPaymentRecord((float)$amount, 'paytabs', $cartId);
+
+        return redirect()->route('invoices.payment', $token)
+            ->with('success', 'Payment processed successfully.');
+    }
+
+    public function invoiceCallbackFromLink(Request $request)
+    {
+        try {
+            $cartId = $request->input('cartId') ?? $request->input('cart_id');
+            $respStatus = $request->input('respStatus') ?? $request->input('resp_status');
+            $tranRef = $request->input('tranRef') ?? $request->input('tran_ref');
+
+            if ($cartId && $respStatus === 'A') {
+                $parts = explode('_', $cartId);
+                if (count($parts) >= 4 && $parts[0] === 'invoice') {
+                    $invoiceId = $parts[1];
+                    $amount = $parts[2];
+                    $invoice = \App\Models\Invoice::find($invoiceId);
+
+                    if ($invoice) {
+                        $paymentId = $tranRef ?? $cartId;
+                        $existingPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
+                            ->where('transaction_id', $paymentId)
+                            ->first();
+                            
+                        if (!$existingPayment) {
+                            $invoice->createPaymentRecord((float)$amount, 'paytabs', $paymentId);
+                        }
+                    }
+                }
+            }
+
+            return response('OK', 200);
+        } catch (\Exception $e) {
+            Log::error('PayTabs callback from link error: ' . $e->getMessage());
+            return response('ERROR', 500);
+        }
+    }
 }

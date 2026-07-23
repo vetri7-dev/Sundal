@@ -39,7 +39,11 @@ class BudgetService
         }
         
         $projectBudget = $expense->project->budget;
-        $totalSpent = $projectBudget->expenses()->approved()->sum('amount');
+        if (!$projectBudget || is_string($projectBudget)) {
+            return;
+        }
+        
+        $totalSpent = $expense->project->expenses()->approved()->sum('amount');
         
         // Calculate utilization percentage
         $utilizationPercentage = $projectBudget->total_budget > 0 
@@ -79,9 +83,9 @@ class BudgetService
     private function checkBudgetAlerts(ProjectExpense $expense): void
     {
         // Check project budget alerts
-        if ($expense->project && $expense->project->budget) {
+        if ($expense->project && $expense->project->budget && !is_string($expense->project->budget)) {
             $projectBudget = $expense->project->budget;
-            $utilizationPercentage = $projectBudget->utilization_percentage;
+            $utilizationPercentage = cache()->get("budget_utilization_{$projectBudget->id}", 0);
             
             if ($utilizationPercentage >= 90) {
                 // Trigger critical budget alert

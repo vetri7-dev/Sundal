@@ -74,14 +74,21 @@ use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\ZapierController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\GoogleMeetingController;
 
 
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// Public client portal (no auth)
-Route::get('portal/{token}', [ClientPortalController::class, 'show'])->name('portal.show');
+// Public project view routes
+Route::get('project/{encryptedId}', [\App\Http\Controllers\ProjectController::class, 'publicView'])
+    ->name('projects.public-view');
+Route::post('project/{encryptedId}', [\App\Http\Controllers\ProjectController::class, 'publicView'])
+    ->name('projects.public-view.password');
+
+// Invoice preview route (public, no auth required)
+Route::get('invoice-preview', [\App\Http\Controllers\InvoicePreviewController::class, 'preview'])->name('invoice.preview');
 Route::post('portal/{token}/bug', [ClientPortalController::class, 'submitBug'])->name('portal.submit-bug');
 
 // Public form routes (no auth required)
@@ -384,6 +391,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('companies/{company}/toggle-status', [CompanyController::class, 'toggleStatus'])->middleware('permission:company_toggle_status')->name('companies.toggle-status');
             Route::get('companies/{company}/plans', [CompanyController::class, 'getPlans'])->middleware('permission:company_manage_plans')->name('companies.plans');
             Route::put('companies/{company}/upgrade-plan', [CompanyController::class, 'upgradePlan'])->middleware('permission:company_upgrade_plan')->name('companies.upgrade-plan');
+            Route::get('companies/export', [CompanyController::class, 'export'])->middleware('permission:company_view_any')->name('companies.export');
+            Route::post('companies/import', [CompanyController::class, 'import'])->middleware('permission:company_create')->name('companies.import');
+            Route::get('companies/sample', [CompanyController::class, 'downloadSample'])->middleware('permission:company_view_any')->name('companies.sample');
         });
 
         // Newsletter routes
@@ -419,13 +429,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 
         // Referral routes
-        // Route::middleware('permission:manage-referral')->group(function () {
-        //     Route::get('referral', [ReferralController::class, 'index'])->middleware('permission:manage-referral')->name('referral.index');
-        //     Route::post('referral/settings', [ReferralController::class, 'updateSettings'])->middleware('permission:manage-setting-referral')->name('referral.settings.update');
-        //     Route::post('referral/payout-request', [ReferralController::class, 'createPayoutRequest'])->middleware('permission:manage-payout-referral')->name('referral.payout-request.create');
-        //     Route::post('referral/payout-request/{payoutRequest}/approve', [ReferralController::class, 'approvePayoutRequest'])->middleware('permission:approve-payout-referral')->name('referral.payout-request.approve');
-        //     Route::post('referral/payout-request/{payoutRequest}/reject', [ReferralController::class, 'rejectPayoutRequest'])->middleware('permission:reject-payout-referral')->name('referral.payout-request.reject');
-        // });
+        Route::middleware('permission:referral_view_any')->group(function () {
+            Route::get('referral', [ReferralController::class, 'index'])->middleware('permission:referral_view_any')->name('referral.index');
+            Route::get('referral/referred-users', [ReferralController::class, 'getReferredUsers'])->middleware('permission:referral_view_any')->name('referral.referred-users');
+            Route::post('referral/settings', [ReferralController::class, 'updateSettings'])->middleware('permission:referral_manage')->name('referral.settings.update');
+            Route::post('referral/payout-request', [ReferralController::class, 'createPayoutRequest'])->middleware('permission:referral_payout')->name('referral.payout-request.create');
+            Route::post('referral/payout-request/{payoutRequest}/approve', [ReferralController::class, 'approvePayoutRequest'])->middleware('permission:referral_approve_payout')->name('referral.payout-request.approve');
+            Route::post('referral/payout-request/{payoutRequest}/reject', [ReferralController::class, 'rejectPayoutRequest'])->middleware('permission:referral_reject_payout')->name('referral.payout-request.reject');
+        });
 
 
 
@@ -446,10 +457,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/languages/{languageCode}', [LanguageController::class, 'deleteLanguage'])->middleware('permission:language_delete')->name('languages.delete');
         Route::patch('/languages/{languageCode}/toggle', [LanguageController::class, 'toggleLanguageStatus'])->middleware('permission:language_update')->name('languages.toggle');
         Route::post('user/update-language', [UserController::class, 'updateLanguage'])->name('user.update-language.web');
+        Route::post('user/update-layout-direction', [UserController::class, 'updateLayoutDirection'])->name('user.update-layout-direction');
 
         // User logs
         Route::get('users/all-logs', [UserController::class, 'allUserLogs'])->name('users.all-logs');
         Route::get('login-histories/{loginHistory}', [UserController::class, 'showLoginHistory'])->name('login-histories.show');
+        Route::delete('users/login-histories/{id}', [UserController::class, 'destroyLoginHistory'])->name('users.destroyLoginHistory');
 
         // Landing Page content management
         Route::get('landing-page/settings', [LandingPageController::class, 'settings'])->middleware('permission:landing_page_manage')->name('landing-page.settings');
@@ -531,6 +544,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('projects/{project}/portal/toggle', [ClientPortalController::class, 'toggle'])->name('portal.toggle');
         Route::post('projects/{project}/portal/regenerate', [ClientPortalController::class, 'regenerateToken'])->name('portal.regenerate');
 
+        Route::put('projects/{project}/shared-settings', [\App\Http\Controllers\ProjectController::class, 'updateSharedSettings'])->middleware('permission:project_manage_shared_settings')->name('projects.update-shared-settings');
+        Route::post('projects/{project}/generate-share-link', [\App\Http\Controllers\ProjectController::class, 'generateShareLink'])->middleware('permission:project_manage_shared_settings')->name('projects.generate-share-link');
+
+        // Gantt Chart Routes
+        Route::get('projects/{project}/gantt/{duration?}', [\App\Http\Controllers\ProjectController::class, 'gantt'])
+            ->name('projects.gantt')
+            ->where('duration', 'Quarter Day|Half Day|Day|Week|Month');
+        Route::post('projects/{project}/gantt/update', [\App\Http\Controllers\ProjectController::class, 'ganttUpdate'])
+            ->name('projects.gantt.update');
+
         // Project routes
         Route::get('projects', [\App\Http\Controllers\ProjectController::class, 'index'])->middleware('permission:project_view_any')->name('projects.index');
         Route::get('projects/create', [\App\Http\Controllers\ProjectController::class, 'create'])->middleware('permission:project_create')->name('projects.create');
@@ -587,6 +610,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('tasks/{task}/duplicate', [\App\Http\Controllers\TaskController::class, 'duplicate'])->middleware('permission:task_duplicate')->name('tasks.duplicate');
         Route::put('tasks/{task}/stage', [\App\Http\Controllers\TaskController::class, 'changeStage'])->middleware('permission:task_change_status')->name('tasks.change-stage');
+        Route::get('api/tasks/calendar', [\App\Http\Controllers\TaskController::class, 'getCalendarTasks'])->middleware('permission:task_view_any')->name('api.tasks.calendar');
 
         // Task stages
         Route::get('task-stages', [\App\Http\Controllers\TaskStageController::class, 'index'])->middleware('permission:task_manage_stages')->name('task-stages.index');
@@ -789,6 +813,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('invoices/{invoice}/mark-paid', [\App\Http\Controllers\InvoiceController::class, 'markAsPaid'])->middleware('permission:invoice_manage_payments')->name('invoices.mark-paid');
         Route::post('invoices/{invoice}/send', [\App\Http\Controllers\InvoiceController::class, 'send'])->middleware('permission:invoice_send')->name('invoices.send');
+        Route::get('invoices/{invoice}/preview', [\App\Http\Controllers\InvoiceController::class, 'preview'])->middleware('permission:invoice_view')->name('invoices.preview');
+        Route::post('invoices/{invoice}/payments/{payment}/approve', [\App\Http\Controllers\InvoiceController::class, 'approvePayment'])->middleware('permission:invoice_manage_payments')->name('invoices.payments.approve');
+        Route::post('invoices/{invoice}/payments/{payment}/reject', [\App\Http\Controllers\InvoiceController::class, 'rejectPayment'])->middleware('permission:invoice_manage_payments')->name('invoices.payments.reject');
         Route::get('api/projects/{project}/invoice-data', [\App\Http\Controllers\InvoiceController::class, 'getProjectInvoiceData'])->middleware('permission:invoice_view_any')->name('api.projects.invoice-data');
 
         // Invoice payment routes
@@ -840,6 +867,95 @@ Route::middleware(['auth', 'verified'])->group(function () {
         
         // Project API routes
         Route::get('api/projects/{project}/members', [\App\Http\Controllers\ZoomMeetingController::class, 'getProjectMembers'])->name('api.projects.members');
+
+        // Google Meeting routes
+        Route::get('google-meetings', [GoogleMeetingController::class, 'index'])->middleware('permission:google_meeting_view_any')->name('google-meetings.index');
+        Route::get('google-meetings/create', [GoogleMeetingController::class, 'create'])->middleware('permission:google_meeting_create')->name('google-meetings.create');
+        Route::post('google-meetings', [GoogleMeetingController::class, 'store'])->middleware('permission:google_meeting_create')->name('google-meetings.store');
+        Route::get('google-meetings/{googleMeeting}', [GoogleMeetingController::class, 'show'])->middleware('permission:google_meeting_view')->name('google-meetings.show');
+        Route::put('google-meetings/{googleMeeting}', [GoogleMeetingController::class, 'update'])->middleware('permission:google_meeting_update')->name('google-meetings.update');
+        Route::patch('google-meetings/{googleMeeting}', [GoogleMeetingController::class, 'update'])->middleware('permission:google_meeting_update');
+        Route::delete('google-meetings/{googleMeeting}', [GoogleMeetingController::class, 'destroy'])->middleware('permission:google_meeting_delete')->name('google-meetings.destroy');
+        Route::post('google-meetings/{googleMeeting}/join', [GoogleMeetingController::class, 'join'])->name('google-meetings.join');
+        Route::get('api/google-meetings/calendar', [GoogleMeetingController::class, 'calendar'])->name('api.google-meetings.calendar');
+
+        // Google Meet Settings routes
+        Route::post('google-meet/settings', [\App\Http\Controllers\Settings\GoogleMeetSettingsController::class, 'update'])->middleware('permission:settings_manage')->name('google-meet.settings.update');
+        Route::post('google-meet/test-connection', [\App\Http\Controllers\Settings\GoogleMeetSettingsController::class, 'testConnection'])->middleware('permission:settings_manage')->name('google-meet.test-connection');
+
+        // Tax routes
+        Route::get('taxes', [\App\Http\Controllers\TaxController::class, 'index'])->middleware('permission:tax_view_any')->name('taxes.index');
+        Route::post('taxes', [\App\Http\Controllers\TaxController::class, 'store'])->middleware('permission:tax_create')->name('taxes.store');
+        Route::put('taxes/{tax}', [\App\Http\Controllers\TaxController::class, 'update'])->middleware('permission:tax_update')->name('taxes.update');
+        Route::delete('taxes/{tax}', [\App\Http\Controllers\TaxController::class, 'destroy'])->middleware('permission:tax_delete')->name('taxes.destroy');
+
+        // Notes routes
+        Route::get('notes', [\App\Http\Controllers\NoteController::class, 'index'])->middleware('permission:note_view_any')->name('notes.index');
+        Route::post('notes', [\App\Http\Controllers\NoteController::class, 'store'])->middleware('permission:note_create')->name('notes.store');
+        Route::put('notes/{note}', [\App\Http\Controllers\NoteController::class, 'update'])->middleware('permission:note_update')->name('notes.update');
+        Route::delete('notes/{note}', [\App\Http\Controllers\NoteController::class, 'destroy'])->middleware('permission:note_delete')->name('notes.destroy');
+
+        // Task Calendar routes
+        Route::get('task-calendar', [\App\Http\Controllers\CalendarController::class, 'index'])->middleware('permission:task_calendar_view')->name('task-calendar.index');
+        Route::get('api/task-calendar/task/{task}', [\App\Http\Controllers\CalendarController::class, 'getTask'])->middleware('permission:task_view')->name('api.task-calendar.task');
+
+        // Contract Types routes
+        Route::get('contract-types', [\App\Http\Controllers\ContractTypeController::class, 'index'])->middleware('permission:contract_type_view_any')->name('contract-types.index');
+        Route::post('contract-types', [\App\Http\Controllers\ContractTypeController::class, 'store'])->middleware('permission:contract_type_create')->name('contract-types.store');
+        Route::put('contract-types/{contractType}', [\App\Http\Controllers\ContractTypeController::class, 'update'])->middleware('permission:contract_type_update')->name('contract-types.update');
+        Route::delete('contract-types/{contractType}', [\App\Http\Controllers\ContractTypeController::class, 'destroy'])->middleware('permission:contract_type_delete')->name('contract-types.destroy');
+        Route::post('contract-types/reorder', [\App\Http\Controllers\ContractTypeController::class, 'reorder'])->middleware('permission:contract_type_update')->name('contract-types.reorder');
+        Route::put('contract-types/{contractType}/toggle-status', [\App\Http\Controllers\ContractTypeController::class, 'toggleStatus'])->middleware('permission:contract_type_update')->name('contract-types.toggle-status');
+
+        // Contracts routes
+        Route::get('contracts', [\App\Http\Controllers\ContractController::class, 'index'])->middleware('permission:contract_view_any')->name('contracts.index');
+        Route::get('contracts/create', [\App\Http\Controllers\ContractController::class, 'create'])->middleware('permission:contract_create')->name('contracts.create');
+        Route::post('contracts', [\App\Http\Controllers\ContractController::class, 'store'])->middleware('permission:contract_create')->name('contracts.store');
+        Route::get('contracts/{contract}', [\App\Http\Controllers\ContractController::class, 'show'])->middleware('permission:contract_view')->name('contracts.show');
+        Route::get('contracts/{contract}/edit', [\App\Http\Controllers\ContractController::class, 'edit'])->middleware('permission:contract_update')->name('contracts.edit');
+        Route::put('contracts/{contract}', [\App\Http\Controllers\ContractController::class, 'update'])->middleware('permission:contract_update')->name('contracts.update');
+        Route::delete('contracts/{contract}', [\App\Http\Controllers\ContractController::class, 'destroy'])->middleware('permission:contract_delete')->name('contracts.destroy');
+        Route::post('contracts/{contract}/duplicate', [\App\Http\Controllers\ContractController::class, 'duplicate'])->middleware('permission:contract_create')->name('contracts.duplicate');
+        Route::put('contracts/{contract}/status', [\App\Http\Controllers\ContractController::class, 'changeStatus'])->middleware('permission:contract_change_status')->name('contracts.change-status');
+        Route::get('contracts/{contract}/download', [\App\Http\Controllers\ContractController::class, 'download'])->middleware('permission:contract_download')->name('contracts.download');
+        Route::get('contracts/{contract}/preview', [\App\Http\Controllers\ContractController::class, 'preview'])->middleware('permission:contract_preview')->name('contracts.preview');
+        Route::post('contracts/{contract}/notes', [\App\Http\Controllers\ContractController::class, 'noteStore'])->middleware('permission:contract_note_create')->name('contract-notes.store');
+        Route::put('contracts/{contract}/notes/{note}', [\App\Http\Controllers\ContractController::class, 'noteUpdate'])->middleware('permission:contract_note_update')->name('contract-notes.update');
+        Route::delete('contracts/{contract}/notes/{note}', [\App\Http\Controllers\ContractController::class, 'noteDestroy'])->middleware('permission:contract_note_delete')->name('contract-notes.destroy');
+        Route::post('contracts/{contract}/comments', [\App\Http\Controllers\ContractController::class, 'commentStore'])->middleware('permission:contract_comment_create')->name('contract-comments.store');
+        Route::put('contract-comments/{comment}', [\App\Http\Controllers\ContractController::class, 'commentUpdate'])->middleware('permission:contract_comment_update')->name('contract-comments.update');
+        Route::delete('contract-comments/{comment}', [\App\Http\Controllers\ContractController::class, 'commentDestroy'])->middleware('permission:contract_comment_delete')->name('contract-comments.destroy');
+        Route::post('contracts/{contract}/attachments', [\App\Http\Controllers\ContractController::class, 'fileUpload'])->middleware('permission:contract_attachment_create')->name('contract-attachments.store');
+        Route::delete('contract-attachments/{attachment}', [\App\Http\Controllers\ContractController::class, 'fileDelete'])->middleware('permission:contract_attachment_delete')->name('contract-attachments.destroy');
+        Route::get('contract-attachments/{attachment}/download', [\App\Http\Controllers\ContractController::class, 'fileDownload'])->middleware('permission:contract_attachment_download')->name('contract-attachments.download');
+        Route::post('contracts/{contract}/signature', [\App\Http\Controllers\ContractController::class, 'signatureStore'])->middleware('permission:contract_signature')->name('contracts.signature.store');
+
+        // Google Calendar API routes
+        Route::get('api/google-calendar/events', [\App\Http\Controllers\GoogleCalendarController::class, 'getEvents'])->name('api.google-calendar.events');
+        Route::post('api/google-calendar/sync', [\App\Http\Controllers\GoogleCalendarController::class, 'syncEvents'])->name('api.google-calendar.sync');
+        Route::post('google-calendar/sync', [\App\Http\Controllers\GoogleCalendarController::class, 'syncEvents'])->name('google-calendar.sync');
+
+        // Project Report routes
+        Route::get('project-reports', [\App\Http\Controllers\ProjectReportController::class, 'index'])->middleware('permission:project_report_view_any')->name('project-reports.index');
+        Route::get('project-reports/{project}', [\App\Http\Controllers\ProjectReportController::class, 'show'])->middleware('permission:project_report_view')->name('project-reports.show');
+        Route::post('project-reports/{project}/tasks', [\App\Http\Controllers\ProjectReportController::class, 'getTasksData'])->middleware('permission:project_report_view')->name('project-reports.tasks');
+        Route::get('project-reports/{project}/export', [\App\Http\Controllers\ProjectReportController::class, 'export'])->middleware('permission:project_report_export')->name('project-reports.export');
+
+        // ToDo routes
+        Route::get('todos', [\App\Http\Controllers\TodoController::class, 'index'])->middleware('permission:todo_view_any')->name('todos.index');
+        Route::post('todos', [\App\Http\Controllers\TodoController::class, 'store'])->middleware('permission:todo_create')->name('todos.store');
+        Route::get('todos/{todo}', [\App\Http\Controllers\TodoController::class, 'show'])->middleware('permission:todo_view')->name('todos.show');
+        Route::get('todos/{todo}/edit', [\App\Http\Controllers\TodoController::class, 'edit'])->middleware('permission:todo_update')->name('todos.edit');
+        Route::put('todos/{todo}', [\App\Http\Controllers\TodoController::class, 'update'])->middleware('permission:todo_update')->name('todos.update');
+        Route::delete('todos/{todo}', [\App\Http\Controllers\TodoController::class, 'destroy'])->middleware('permission:todo_delete')->name('todos.destroy');
+        Route::patch('todos/{todo}/status', [\App\Http\Controllers\TodoController::class, 'updateStatus'])->middleware('permission:todo_status_update')->name('todos.update-status');
+        Route::post('todos/{todo}/members', [\App\Http\Controllers\TodoController::class, 'updateMembers'])->middleware('permission:todo_manage_members')->name('todos.update-members');
+        Route::post('todos/{todo}/comments', [\App\Http\Controllers\TodoCommentController::class, 'store'])->middleware('permission:todo_comment_create')->name('todo-comments.store');
+        Route::put('todo-comments/{todoComment}', [\App\Http\Controllers\TodoCommentController::class, 'update'])->middleware('permission:todo_comment_update')->name('todo-comments.update');
+        Route::delete('todo-comments/{todoComment}', [\App\Http\Controllers\TodoCommentController::class, 'destroy'])->middleware('permission:todo_comment_delete')->name('todo-comments.destroy');
+        Route::post('todos/{todo}/attachments', [\App\Http\Controllers\TodoAttachmentController::class, 'store'])->middleware('permission:todo_attachment_create')->name('todo-attachments.store');
+        Route::delete('todo-attachments/{todoAttachment}', [\App\Http\Controllers\TodoAttachmentController::class, 'destroy'])->middleware('permission:todo_attachment_delete')->name('todo-attachments.destroy');
+        Route::get('todo-attachments/{todoAttachment}/download', [\App\Http\Controllers\TodoAttachmentController::class, 'download'])->middleware('permission:todo_attachment_download')->name('todo-attachments.download');
     }); // End plan.access middleware group
 });
 

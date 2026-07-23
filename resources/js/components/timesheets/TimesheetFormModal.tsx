@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar, Save, X, Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Timesheet {
     id?: number;
@@ -53,6 +54,8 @@ interface Props {
 }
 
 export default function TimesheetFormModal({ isOpen, onClose, timesheet, projects = [] }: Props) {
+    const { t } = useTranslation();
+
     const [formData, setFormData] = useState({
         start_date: '',
         end_date: '',
@@ -60,7 +63,7 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
     });
     const [entries, setEntries] = useState<TimesheetEntry[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [errors, setErrors] = useState<string[]>([]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (timesheet && isOpen) {
@@ -128,7 +131,7 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
         const now = new Date();
         const startTime = new Date(now.getTime());
         const endTime = new Date(now.getTime() + 8 * 60 * 60 * 1000); // 8 hours later
-        
+
         const newEntry: TimesheetEntry = {
             project_id: '',
             task_id: 'none',
@@ -158,47 +161,66 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
         return project?.tasks || [];
     };
 
+    const getUsedTaskIds = (currentIndex: number, projectId: string): Set<string> => {
+        return new Set(
+            entries
+                .filter((e, i) => i !== currentIndex && e.project_id?.toString() === projectId && e.task_id && e.task_id.toString() !== 'none')
+                .map(e => e.task_id!.toString())
+        );
+    };
+
+    const getAvailableProjects = (currentIndex: number) => {
+        return projects.filter(project => {
+            const tasks = project.tasks || [];
+            // Always keep the currently selected project visible
+            if (project.id.toString() === entries[currentIndex]?.project_id?.toString()) return true;
+            if (tasks.length === 0) return true;
+            const usedTaskIds = getUsedTaskIds(currentIndex, project.id.toString());
+            return tasks.some(t => !usedTaskIds.has(t.id.toString()));
+        });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setErrors([]);
-        
-        const validationErrors: string[] = [];
-        
+        setErrors({});
+
+        const validationErrors: Record<string, string> = {};
+
         // Validation
         if (!formData.start_date) {
-            validationErrors.push('Please select a start date');
+            validationErrors.start_date = 'The start date field is required.';
         }
         if (!formData.end_date) {
-            validationErrors.push('Please select an end date');
+            validationErrors.end_date = 'The end date field is required.';
         }
         if (formData.start_date && formData.end_date && formData.end_date < formData.start_date) {
-            validationErrors.push('End date must be after or same as start date');
+            validationErrors.end_date = 'End date must be after or same as start date.';
         }
         if (entries.length === 0) {
-            validationErrors.push('Please add at least one time entry');
+            validationErrors.entries = 'Please add at least one time entry.';
         }
-        
+
         for (let i = 0; i < entries.length; i++) {
             const entry = entries[i];
             if (!entry.project_id) {
-                validationErrors.push(`Entry ${i + 1}: Please select a project`);
+                validationErrors[`entries.${i}.project_id`] = 'The project field is required.';
             }
-            if (!entry.task_id) {
-                validationErrors.push(`Entry ${i + 1}: Please select a task`);
+            if (!entry.task_id || entry.task_id === 'none') {
+                validationErrors[`entries.${i}.task_id`] = 'The task field is required.';
             }
             if (!entry.start_time) {
-                validationErrors.push(`Entry ${i + 1}: Please enter start time`);
+                validationErrors[`entries.${i}.start_time`] = 'The start time field is required.';
             }
             if (!entry.end_time) {
-                validationErrors.push(`Entry ${i + 1}: Please enter end time`);
+                validationErrors[`entries.${i}.end_time`] = 'The end time field is required.';
             }
         }
-        
-        if (validationErrors.length > 0) {
+
+        if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
             return;
         }
-        
+
         setIsSubmitting(true);
 
         const submitData = {
@@ -210,10 +232,10 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                 end_time: entry.end_time ? `${formData.start_date}T${entry.end_time}:00` : ''
             }))
         };
-        
+
         console.log('Submitting data:', submitData);
 
-        const url = timesheet 
+        const url = timesheet
             ? route('timesheets.update', timesheet.id)
             : route('timesheets.store');
 
@@ -227,17 +249,17 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
             },
             onError: (backendErrors) => {
                 console.log('Backend errors:', backendErrors);
-                const errorMessages = [];
                 if (typeof backendErrors === 'object') {
+                    const formattedErrors: Record<string, string> = {};
                     Object.keys(backendErrors).forEach(key => {
                         if (Array.isArray(backendErrors[key])) {
-                            errorMessages.push(...backendErrors[key]);
+                            formattedErrors[key] = backendErrors[key][0];
                         } else {
-                            errorMessages.push(backendErrors[key]);
+                            formattedErrors[key] = backendErrors[key];
                         }
                     });
+                    setErrors(formattedErrors);
                 }
-                setErrors(errorMessages.length > 0 ? errorMessages : ['Error submitting timesheet. Please check all fields.']);
             },
             onFinish: () => setIsSubmitting(false)
         });
@@ -252,7 +274,7 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
             <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5" />
+                        <Calendar className="h-5 w-5 text-primary" />
                         {timesheet ? 'Edit Timesheet' : 'New Timesheet'}
                     </DialogTitle>
                 </DialogHeader>
@@ -261,61 +283,57 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                     {/* Basic Timesheet Info */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="start_date">Start Date</Label>
+                            <Label htmlFor="start_date">{t('Start Date')} <span className="text-red-500">*</span></Label>
                             <Input
                                 id="start_date"
                                 type="date"
                                 value={formData.start_date}
                                 onChange={(e) => handleChange('start_date', e.target.value)}
+                                className={errors.start_date ? 'border-red-500' : ''}
                             />
+                            {errors.start_date && <p className="text-red-500 text-sm">{errors.start_date}</p>}
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="end_date">End Date</Label>
+                            <Label htmlFor="end_date">{t('End Date')} <span className="text-red-500">*</span></Label>
                             <Input
                                 id="end_date"
                                 type="date"
                                 value={formData.end_date}
                                 onChange={(e) => handleChange('end_date', e.target.value)}
+                                className={errors.end_date ? 'border-red-500' : ''}
                             />
+                            {errors.end_date && <p className="text-red-500 text-sm">{errors.end_date}</p>}
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="notes">Notes</Label>
+                        <Label htmlFor="notes">{t('Notes')}</Label>
                         <Textarea
                             id="notes"
-                            placeholder="Add any notes about this timesheet..."
+                            placeholder={t('Add any notes about this timesheet...')}
                             value={formData.notes}
                             onChange={(e) => handleChange('notes', e.target.value)}
                             rows={2}
                         />
                     </div>
 
-                    {errors.length > 0 && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <ul className="text-red-700 text-sm space-y-1">
-                                {errors.map((error, index) => (
-                                    <li key={index}>• {error}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+
 
                     {/* Time Entries */}
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <Label className="text-base font-semibold">Time Entries</Label>
+                            <Label className="text-base font-semibold">{t('Time Entries')}</Label>
                             <Button type="button" onClick={addEntry} size="sm">
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Entry
+                                {t('Add Entry')}
                             </Button>
                         </div>
 
                         {entries.map((entry, index) => (
                             <div key={index} className="border rounded-lg p-4 space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <span className="font-medium">Entry {index + 1}</span>
+                                    <span className="font-medium">{t('Entry')} {index + 1}</span>
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -329,44 +347,53 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>Project *</Label>
+                                        <Label>{t('Project')} <span className="text-red-500">*</span></Label>
                                         <Select
                                             value={entry.project_id}
                                             onValueChange={(value) => updateEntry(index, 'project_id', value)}
                                             required
                                         >
-                                            <SelectTrigger>
+                                            <SelectTrigger className={errors[`entries.${index}.project_id`] ? 'border-red-500' : ''}>
                                                 <SelectValue placeholder="Select project" />
                                             </SelectTrigger>
-                                            <SelectContent side="bottom" align="start" sideOffset={4} style={{zIndex: 999999}}>
-                                                {projects.map(project => (
+                                            <SelectContent searchable side="bottom" align="start" sideOffset={4} style={{ zIndex: 999999 }}>
+                                                {getAvailableProjects(index).map(project => (
                                                     <SelectItem key={project.id} value={project.id.toString()}>
                                                         {project.title}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        {errors[`entries.${index}.project_id`] && <p className="text-red-500 text-sm">{errors[`entries.${index}.project_id`]}</p>}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>Task *</Label>
+                                        <Label>{t('Task')} <span className="text-red-500">*</span></Label>
                                         <Select
                                             value={entry.task_id || 'none'}
                                             onValueChange={(value) => updateEntry(index, 'task_id', value)}
                                             required
                                         >
-                                            <SelectTrigger>
+                                            <SelectTrigger className={errors[`entries.${index}.task_id`] ? 'border-red-500' : ''}>
                                                 <SelectValue placeholder="Select task" />
                                             </SelectTrigger>
-                                            <SelectContent side="bottom" align="start" sideOffset={4} style={{zIndex: 999999}}>
-                                                <SelectItem value="none">No task</SelectItem>
-                                                {getTasksForProject(entry.project_id).map(task => (
-                                                    <SelectItem key={task.id} value={task.id.toString()}>
-                                                        {task.title}
-                                                    </SelectItem>
-                                                ))}
+                                            <SelectContent searchable side="bottom" align="start" sideOffset={4} style={{ zIndex: 999999 }}>
+                                                <SelectItem value="none">{t('No task')}</SelectItem>
+                                                {getTasksForProject(entry.project_id)
+                                                    .filter(task => {
+                                                        const taskIdStr = task.id.toString();
+                                                        // Always show the task currently selected in this entry
+                                                        if (taskIdStr === entry.task_id?.toString()) return true;
+                                                        return !getUsedTaskIds(index, entry.project_id).has(taskIdStr);
+                                                    })
+                                                    .map(task => (
+                                                        <SelectItem key={task.id} value={task.id.toString()}>
+                                                            {task.title}
+                                                        </SelectItem>
+                                                    ))}
                                             </SelectContent>
                                         </Select>
+                                        {errors[`entries.${index}.task_id`] && <p className="text-red-500 text-sm">{errors[`entries.${index}.task_id`]}</p>}
                                     </div>
                                 </div>
 
@@ -374,28 +401,32 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>Start Time *</Label>
+                                        <Label>{t('Start Time')} <span className="text-red-500">*</span></Label>
                                         <Input
                                             type="time"
                                             value={entry.start_time || ''}
                                             onChange={(e) => updateEntry(index, 'start_time', e.target.value)}
+                                            className={errors[`entries.${index}.start_time`] ? 'border-red-500' : ''}
                                             required
                                         />
+                                        {errors[`entries.${index}.start_time`] && <p className="text-red-500 text-sm">{errors[`entries.${index}.start_time`]}</p>}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>End Time *</Label>
+                                        <Label>{t('End Time')} <span className="text-red-500">*</span></Label>
                                         <Input
                                             type="time"
                                             value={entry.end_time || ''}
                                             onChange={(e) => updateEntry(index, 'end_time', e.target.value)}
+                                            className={errors[`entries.${index}.end_time`] ? 'border-red-500' : ''}
                                             required
                                         />
+                                        {errors[`entries.${index}.end_time`] && <p className="text-red-500 text-sm">{errors[`entries.${index}.end_time`]}</p>}
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Description</Label>
+                                    <Label>{t('Description')}</Label>
                                     <Textarea
                                         placeholder="Describe the work done..."
                                         value={entry.description}
@@ -409,10 +440,10 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                         {entries.length === 0 && (
                             <div className="text-center py-8 text-muted-foreground">
                                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                <p>No time entries added yet</p>
+                                <p>{t('No time entries added yet')}</p>
                                 <Button type="button" onClick={addEntry} className="mt-2">
                                     <Plus className="h-4 w-4 mr-2" />
-                                    Add First Entry
+                                    {t('Add First Entry')}
                                 </Button>
                             </div>
                         )}
@@ -423,14 +454,11 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                             type="button"
                             variant="outline"
                             onClick={onClose}
-                            disabled={isSubmitting}
                         >
-                            <X className="h-4 w-4 mr-2" />
-                            Cancel
+                            {t('Cancel')}
                         </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                            <Save className="h-4 w-4 mr-2" />
-                            {isSubmitting ? 'Saving...' : timesheet ? 'Update' : 'Create'}
+                        <Button type="submit">
+                            {timesheet ? t('Update') : t('Create')}
                         </Button>
                     </div>
                 </form>

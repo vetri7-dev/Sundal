@@ -17,19 +17,27 @@ class ProjectAttachmentController extends Controller
             abort(403, __('Project not found in current workspace'));
         }
 
+        // Debug log
+        \Log::info('Received media_ids:', $request->all());
+        
         $request->validate([
             'media_ids' => 'required|array',
-            'media_ids.*' => 'exists:media_items,id'
+            'media_ids.*' => 'integer'
         ]);
+        
+        // Check if media items exist
+        $mediaItems = MediaItem::whereIn('id', $request->media_ids)->get();
+        if ($mediaItems->count() !== count($request->media_ids)) {
+            return back()->withErrors(['media_ids' => 'Some selected media items do not exist.']);
+        }
 
         $attachments = [];
         $fileNames = [];
-        foreach ($request->media_ids as $mediaId) {
-            $mediaItem = MediaItem::find($mediaId);
+        foreach ($mediaItems as $mediaItem) {
             $attachment = ProjectAttachment::create([
                 'workspace_id' => $project->workspace_id,
                 'project_id' => $project->id,
-                'media_item_id' => $mediaId,
+                'media_item_id' => $mediaItem->id,
                 'uploaded_by' => auth()->id()
             ]);
             
@@ -73,6 +81,13 @@ class ProjectAttachmentController extends Controller
             abort(404, __('File not found'));
         }
 
-        return response()->download($media->getPath(), $media->name);
+        $filePath = $media->getPath();
+        
+        // Check if file exists
+        if (!file_exists($filePath)) {
+            abort(404, __('File not found on disk'));
+        }
+
+        return response()->download($filePath, $mediaItem->name);
     }
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { Menu, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getImagePath, isRegistrationEnabled, usePageProps } from '@/utils/helpers';
 
 interface CustomPage {
   id: number;
@@ -16,20 +17,44 @@ interface HeaderProps {
   };
   sectionData?: any;
   customPages?: CustomPage[];
+  logoLight?: string;
+  logoDark?: string;
 }
 
-export default function Header({ settings, sectionData, customPages = [], brandColor = '#3b82f6' }: HeaderProps) {
+export default function Header({ settings, sectionData, customPages = [], brandColor = '#3b82f6', logoLight, logoDark }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-    const { t } = useTranslation();
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { t } = useTranslation();
+  const pageProps = usePageProps();
 
 
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
+    
+    // Check dark mode
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    
+    // Initial check
+    checkDarkMode();
+    
+    // Watch for dark mode changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      observer.disconnect();
+    };
   }, []);
 
   const menuItems = customPages.map(page => ({
@@ -69,9 +94,16 @@ export default function Header({ settings, sectionData, customPages = [], brandC
               href={route("home")} 
               className="flex items-center gap-2"
             >
-              {sectionData?.logo_light || sectionData?.logo_dark ? (
+              {/* Priority: 1. Section data logo, 2. Super Admin/Owner logo, 3. Company name */}
+              {(sectionData?.logo_light || sectionData?.logo_dark) ? (
                 <img 
-                  src={sectionData?.logo_light || sectionData?.logo_dark} 
+                  src={getImagePath(sectionData?.logo_light || sectionData?.logo_dark)} 
+                  alt={settings.company_name}
+                  className="h-8 w-auto"
+                />
+              ) : (logoLight || logoDark) ? (
+                <img 
+                  src={isDarkMode ? logoLight : logoDark} 
                   alt={settings.company_name}
                   className="h-8 w-auto"
                 />
@@ -124,17 +156,9 @@ export default function Header({ settings, sectionData, customPages = [], brandC
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            <a
-              href={route('login')}
-              className="text-gray-600 dark:text-gray-300 text-sm font-medium transition-colors"
-              onMouseEnter={(e) => (e.currentTarget.style.color = brandColor)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '')}
-            >
-              {t('Login')}
-            </a>
-            {((usePage().props as any).isSaas) && (
-              <a
-                href={route('register')}
+            {pageProps.auth?.user ? (
+              <Link
+                href={route('dashboard')}
                 className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors border"
                 style={{ 
                   backgroundColor: brandColor, 
@@ -150,8 +174,40 @@ export default function Header({ settings, sectionData, customPages = [], brandC
                   e.currentTarget.style.color = 'white';
                 }}
               >
-              {t('Get Started')}
-              </a>
+                {t('Dashboard')}
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href={route('login')}
+                  className="text-gray-600 dark:text-gray-300 text-sm font-medium transition-colors"
+                  onMouseEnter={(e) => e.currentTarget.style.color = brandColor}
+                  onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                >
+                  {t('Login')}
+                </Link>
+                {(pageProps.isSaas && isRegistrationEnabled()) && (
+                  <Link
+                    href={route('register')}
+                    className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors border"
+                    style={{ 
+                      backgroundColor: brandColor, 
+                      color: 'white',
+                      borderColor: brandColor
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                      e.currentTarget.style.color = brandColor;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = brandColor;
+                      e.currentTarget.style.color = 'white';
+                    }}
+                  >
+                  {t('Get Started')}
+                  </Link>
+                )}
+              </>
             )}
           </div>
 
@@ -159,7 +215,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-2 text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={isMenuOpen}
               aria-controls="mobile-menu"
@@ -194,17 +250,9 @@ export default function Header({ settings, sectionData, customPages = [], brandC
                 </Link>
               ))}
               <div className="pt-4 space-y-3 border-t border-gray-200 dark:border-gray-700">
-                <a
-                  href={route('login')}
-                  className="block w-full text-center text-gray-600 dark:text-gray-300 py-2.5 text-sm font-medium transition-colors"
-                  onMouseEnter={(e) => (e.currentTarget.style.color = brandColor)}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '')}
-                >
-                  {t('Login')}
-                </a>
-                {((usePage().props as any).isSaas) && (
-                  <a
-                    href={route('register')}
+                {pageProps.auth?.user ? (
+                  <Link
+                    href={route('dashboard')}
                     className="block w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-colors border"
                     style={{ 
                       backgroundColor: brandColor, 
@@ -220,8 +268,40 @@ export default function Header({ settings, sectionData, customPages = [], brandC
                       e.currentTarget.style.color = 'white';
                     }}
                   >
-                    {t('Get Started')}
-                  </a>
+                    {t('Dashboard')}
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href={route('login')}
+                      className="block w-full text-center text-gray-600 dark:text-gray-300 py-2.5 text-sm font-medium transition-colors"
+                      onMouseEnter={(e) => e.currentTarget.style.color = brandColor}
+                      onMouseLeave={(e) => e.currentTarget.style.color = ''}
+                    >
+                      {t('Login')}
+                    </Link>
+                    {(pageProps.isSaas && isRegistrationEnabled()) && (
+                      <Link
+                        href={route('register')}
+                        className="block w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-colors border"
+                        style={{ 
+                          backgroundColor: brandColor, 
+                          color: 'white',
+                          borderColor: brandColor
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'white';
+                          e.currentTarget.style.color = brandColor;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = brandColor;
+                          e.currentTarget.style.color = 'white';
+                        }}
+                      >
+                        {t('Get Started')}
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             </div>

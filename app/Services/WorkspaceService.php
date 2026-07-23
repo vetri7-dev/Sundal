@@ -50,6 +50,9 @@ class WorkspaceService
             // Set as current workspace
             $owner->update(['current_workspace_id' => $workspace->id]);
 
+            // Enable Workspace Invitation email template for this workspace
+            enableWorkspaceInvitationForUser($owner->id, $workspace->id);
+
             return $workspace;
         });
     }
@@ -71,6 +74,10 @@ class WorkspaceService
         
         if ($existingUser && $workspace->hasMember($existingUser)) {
             throw new \Exception('User is already a member of this workspace');
+        }
+        
+        if ($existingUser && $existingUser->type=='superadmin') {
+            throw new \Exception('This email is already registered.');
         }
 
         $invitation = WorkspaceInvitation::create([
@@ -99,6 +106,17 @@ class WorkspaceService
                 throw new \Exception('Invitation has expired');
             }
 
+            // Get workspace's defaultLanguage setting
+            $workspace = $invitation->workspace;
+            $workspaceOwnerId = $workspace->owner_id;
+            $defaultLanguage = \App\Models\Setting::where('user_id', $workspaceOwnerId)
+                ->where('workspace_id', $invitation->workspace_id)
+                ->where('key', 'defaultLanguage')
+                ->value('value') ?? 'en';
+
+            $rtlLanguages = ['ar', 'he'];
+            $layoutDirection = in_array($defaultLanguage, $rtlLanguages) ? 'right' : 'left';
+
             $user = User::where('email', $invitation->email)->first();
             
             if (!$user) {
@@ -106,7 +124,10 @@ class WorkspaceService
                     throw new \Exception('Password required for new user');
                 }
                 
-                $user = $this->createUserFromInvitation($invitation, $password);
+                $user = $this->createUserFromInvitation($invitation, $password, $defaultLanguage);
+            } else {
+                // Update existing user's lang from workspace setting
+                $user->update(['lang' => $defaultLanguage]);
             }
 
             WorkspaceMember::create([
@@ -125,11 +146,17 @@ class WorkspaceService
                 $user->update(['current_workspace_id' => $invitation->workspace_id]);
             }
 
+            // Set layoutDirection setting for the user in this workspace
+            \App\Models\Setting::updateOrCreate(
+                ['user_id' => $user->id, 'workspace_id' => $invitation->workspace_id, 'key' => 'layoutDirection'],
+                ['value' => $layoutDirection]
+            );
+
             return ['user' => $user, 'workspace' => $invitation->workspace];
         });
     }
 
-    private function createUserFromInvitation(WorkspaceInvitation $invitation, string $password): User
+    private function createUserFromInvitation(WorkspaceInvitation $invitation, string $password, string $lang = 'en'): User
     {
         $name = explode('@', $invitation->email)[0];
         
@@ -140,7 +167,9 @@ class WorkspaceService
             'type' => 'company', // All users are company type
             'is_enable_login' => 1,
             'email_verified_at' => now(),
-            'current_workspace_id' => $invitation->workspace_id // Set invited workspace as current
+            'created_by' => $invitation->invited_by,
+            'current_workspace_id' => $invitation->workspace_id,
+            'lang' => $lang,
         ]);
         
         // Assign the role they were invited with

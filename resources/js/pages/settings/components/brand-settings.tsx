@@ -16,8 +16,7 @@ import { SidebarPreview } from '@/components/sidebar-preview';
 import MediaPicker from '@/components/MediaPicker';
 import { useTranslation } from 'react-i18next';
 import { usePage, router } from '@inertiajs/react';
-
-import { applyRTLFromCookies } from '@/utils/rtl-utils';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Define the brand settings interface
 export interface BrandSettings {
@@ -40,9 +39,9 @@ export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   logoLight: 'images/logos/logo-light.png',
   favicon: 'images/logos/favicon.png',
   titleText: 'Taskly',
-  footerText: '© 2025 Taskly. All rights reserved.',
+  footerText: '© 2026 Taskly. All rights reserved.',
   themeColor: 'green',
-  customColor: '#10b981',
+  customColor: '#10B77f',
   sidebarVariant: 'inset',
   sidebarStyle: 'plain',
   layoutDirection: 'left',
@@ -82,10 +81,10 @@ export const getBrandSettings = (userSettings?: Record<string, string>, isDemoMo
   if (isDemoMode) {
     const cookieData = getCookie('brandSettings');
     const logoData = localStorage.getItem('brandLogos');
-    
+
     let cookieSettings = {};
     let logoSettings = {};
-    
+
     if (cookieData) {
       try {
         cookieSettings = JSON.parse(cookieData);
@@ -93,7 +92,7 @@ export const getBrandSettings = (userSettings?: Record<string, string>, isDemoMo
         console.error('Failed to parse brand settings from cookie', error);
       }
     }
-    
+
     if (logoData) {
       try {
         logoSettings = JSON.parse(logoData);
@@ -101,7 +100,7 @@ export const getBrandSettings = (userSettings?: Record<string, string>, isDemoMo
         console.error('Failed to parse logo settings from localStorage', error);
       }
     }
-    
+
     const getFullUrl = (path: string, defaultPath: string) => {
       if (!path) path = defaultPath;
       if (path.startsWith('http')) return path;
@@ -181,6 +180,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
     saveThemeSettings
   } = useAppearance();
 
+  // const { updatePosition, saveLayoutPosition, position: currentLayoutPosition } = useLayout();
   const { updatePosition, saveLayoutPosition } = useLayout();
   const { updateVariant, updateStyle, saveSidebarSettings } = useSidebarSettings();
 
@@ -189,19 +189,24 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
     if (isSaving) return; // Don't reset form while saving
 
     const brandSettings = getBrandSettings(currentGlobalSettings || userSettings, isDemoMode);
-    setSettings(brandSettings);
+
+    // NEVER automatically update layout direction - only update other settings
+    setSettings(prev => ({
+      ...brandSettings,
+      layoutDirection: prev.layoutDirection // Keep current user selection
+    }));
 
     // Also sync sidebar settings from cookies or localStorage
     try {
       const isDemo = currentGlobalSettings?.is_demo || false;
       let sidebarSettings = null;
-      
+
       if (isDemo) {
         // In demo mode, get from cookies
         sidebarSettings = getCookie('sidebarSettings');
       }
       // In non-demo mode, sidebar settings come from database via props
-      
+
       if (sidebarSettings) {
         const parsedSettings = JSON.parse(sidebarSettings);
         setSettings(prev => ({
@@ -248,7 +253,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
   const handleMediaSelect = (name: string, url: string) => {
     setSettings(prev => ({ ...prev, [name]: url }));
     updateBrandSettings({ [name]: url });
-    
+
     // In demo mode, save logos to localStorage
     if (isDemoMode && ['logoLight', 'logoDark', 'favicon'].includes(name)) {
       const currentLogos = JSON.parse(localStorage.getItem('brandLogos') || '{}');
@@ -261,10 +266,6 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
 
   // Import useBrand hook
   const { updateBrandSettings } = useBrand();
-
-
-
-
 
   // Handle theme color change
   const handleThemeColorChange = (color: ThemeColor) => {
@@ -295,27 +296,22 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
   const handleLayoutDirectionChange = (direction: LayoutPosition) => {
     setSettings(prev => ({ ...prev, layoutDirection: direction }));
     updatePosition(direction);
-    
-    // Apply RTL/LTR immediately to DOM
-    const dir = direction === 'right' ? 'rtl' : 'ltr';
-    document.documentElement.dir = dir;
-    document.documentElement.setAttribute('dir', dir);
-    document.body.dir = dir;
-    document.body.setAttribute('dir', dir);
-    
-    if (dir === 'rtl') {
-      document.documentElement.classList.add('rtl');
-      document.body.classList.add('rtl');
-    } else {
-      document.documentElement.classList.remove('rtl');
-      document.body.classList.remove('rtl');
-    }
+    window.dispatchEvent(new CustomEvent('layoutDirectionChanged', {
+      detail: { direction }
+    }));
   };
 
   // Handle theme mode change
   const handleThemeModeChange = (mode: Appearance) => {
     setSettings(prev => ({ ...prev, themeMode: mode }));
     updateAppearance(mode);
+
+    // Force immediate logo update in brand context
+    updateBrandSettings({
+      logoLight: settings.logoLight,
+      logoDark: settings.logoDark,
+      favicon: settings.favicon
+    });
   };
 
 
@@ -336,11 +332,11 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
     // Update sidebar settings
     updateVariant(settings.sidebarVariant as any);
     updateStyle(settings.sidebarStyle);
-    
+
     // Save all settings to cookies in demo mode
     saveThemeSettings();
     saveSidebarSettings();
-    saveLayoutPosition();
+    saveLayoutPosition(settings.layoutDirection);
 
     // Update brand context
     updateBrandSettings({
@@ -348,9 +344,6 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
       logoDark: settings.logoDark,
       favicon: settings.favicon
     });
-
-    // Individual update functions already handled storage (cookies in demo mode, localStorage in normal mode)
-    // Only save to database in normal mode
 
     if (isDemoMode) {
       // Demo mode: save logos to localStorage, other settings to cookies
@@ -360,7 +353,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
         favicon: convertToRelativePath(settings.favicon)
       };
       localStorage.setItem('brandLogos', JSON.stringify(logoSettings));
-      
+
       const otherSettings = {
         titleText: settings.titleText,
         footerText: settings.footerText,
@@ -372,7 +365,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
         themeMode: settings.themeMode
       };
       setCookie('brandSettings', JSON.stringify(otherSettings));
-      
+
       setIsLoading(false);
       setIsSaving(false);
       toast.error('This action is disabled in demo mode. You can only create new data, not modify existing demo data.');
@@ -384,23 +377,22 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
         logoLight: convertToRelativePath(settings.logoLight),
         favicon: convertToRelativePath(settings.favicon)
       };
-      
+
       router.post(route('settings.brand.update'), {
         settings: settingsToSave
       }, {
         preserveScroll: true,
         onSuccess: (page) => {
-          setIsLoading(false);
-          const successMessage = page.props.flash?.success;
-          const errorMessage = page.props.flash?.error;
+            setIsLoading(false);
+            const successMessage = page.props.flash?.success;
+            const errorMessage = page.props.flash?.error;
 
-          if (successMessage) {
-            toast.success(successMessage);
-            // Reset saving state after success
+            if (successMessage) {
+                toast.success(successMessage);
+            } else if (errorMessage) {
+                toast.error(errorMessage);
+            }
             setTimeout(() => setIsSaving(false), 500);
-          } else if (errorMessage) {
-            toast.error(errorMessage);
-          }
         },
         onError: (errors) => {
           setIsLoading(false);
@@ -424,424 +416,433 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="flex space-x-2 mb-6">
-            <Button
-              variant={activeSection === 'logos' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveSection('logos')}
-              className="flex-1"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {t("Logos")}
-            </Button>
-            <Button
-              variant={activeSection === 'text' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveSection('text')}
-              className="flex-1"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              {t("Text")}
-            </Button>
-            <Button
-              variant={activeSection === 'theme' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveSection('theme')}
-              className="flex-1"
-            >
-              <Palette className="h-4 w-4 mr-2" />
-              {t("Theme")}
-            </Button>
-          </div>
-
-          {/* Logos Section */}
-          {activeSection === 'logos' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label>{t("Logo (Dark Mode)")}</Label>
-                  <div className="flex flex-col gap-3">
-                    <div className="border rounded-md p-4 flex items-center justify-center bg-muted/30 h-32">
-                      {settings.logoDark ? (
-                        <img
-                          src={(() => {
-                            const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
-                            return settings.logoDark.startsWith('http') ? settings.logoDark : `${appUrl}/${settings.logoDark.replace(/^\//, '')}`;
-                          })()}
-                          alt="Dark Logo"
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      ) : (
-                        <div className="text-muted-foreground flex flex-col items-center gap-2">
-                          <div className="h-12 w-24 bg-muted flex items-center justify-center rounded border border-dashed">
-                            <span className="font-semibold text-muted-foreground">{t("Logo")}</span>
-                          </div>
-                          <span className="text-xs">No logo selected</span>
-                        </div>
-                      )}
-                    </div>
-                    <MediaPicker
-                      label=""
-                      value={settings.logoDark}
-                      onChange={(url) => handleMediaSelect('logoDark', url)}
-                      placeholder="Select dark mode logo..."
-                      showPreview={false}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Label>{t("Logo (Light Mode)")}</Label>
-                  <div className="flex flex-col gap-3">
-                    <div className="border rounded-md p-4 flex items-center justify-center bg-muted/30 h-32">
-                      {settings.logoLight ? (
-                        <img
-                          src={(() => {
-                            const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
-                            return settings.logoLight.startsWith('http') ? settings.logoLight : `${appUrl}/${settings.logoLight.replace(/^\//, '')}`;
-                          })()}
-                          alt="Light Logo"
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      ) : (
-                        <div className="text-muted-foreground flex flex-col items-center gap-2">
-                          <div className="h-12 w-24 bg-muted flex items-center justify-center rounded border border-dashed">
-                            <span className="font-semibold text-muted-foreground">{t("Logo")}</span>
-                          </div>
-                          <span className="text-xs">No logo selected</span>
-                        </div>
-                      )}
-                    </div>
-                    <MediaPicker
-                      label=""
-                      value={settings.logoLight}
-                      onChange={(url) => handleMediaSelect('logoLight', url)}
-                      placeholder="Select light mode logo..."
-                      showPreview={false}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Label>{t("Favicon")}</Label>
-                  <div className="flex flex-col gap-3">
-                    <div className="border rounded-md p-4 flex items-center justify-center bg-muted/30 h-20">
-                      {settings.favicon ? (
-                        <img
-                          src={(() => {
-                            const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
-                            return settings.favicon.startsWith('http') ? settings.favicon : `${appUrl}/${settings.favicon.replace(/^\//, '')}`;
-                          })()}
-                          alt="Favicon"
-                          className="h-16 w-16 object-contain"
-                        />
-                      ) : (
-                        <div className="text-muted-foreground flex flex-col items-center gap-1">
-                          <div className="h-10 w-10 bg-muted flex items-center justify-center rounded border border-dashed">
-                            <span className="font-semibold text-xs text-muted-foreground">{t("Icon")}</span>
-                          </div>
-                          <span className="text-xs">No favicon selected</span>
-                        </div>
-                      )}
-                    </div>
-                    <MediaPicker
-                      label=""
-                      value={settings.favicon}
-                      onChange={(url) => handleMediaSelect('favicon', url)}
-                      placeholder="Select favicon..."
-                      showPreview={false}
-                    />
-                  </div>
-                </div>
+            <div className="lg:col-span-2">
+        <Card>
+          <CardContent>
+              <div className="flex space-x-2 mb-6 mt-6">
+                <Button
+                  variant={activeSection === 'logos' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveSection('logos')}
+                  className="flex-1"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {t("Logos")}
+                </Button>
+                <Button
+                  variant={activeSection === 'text' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveSection('text')}
+                  className="flex-1"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  {t("Text")}
+                </Button>
+                <Button
+                  variant={activeSection === 'theme' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveSection('theme')}
+                  className="flex-1"
+                >
+                  <Palette className="h-4 w-4 mr-2" />
+                  {t("Theme")}
+                </Button>
               </div>
-            </div>
-          )}
 
-          {/* Text Section */}
-          {activeSection === 'text' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-3">
-                  <Label htmlFor="titleText">{t("Title Text")}</Label>
-                  <Input
-                    id="titleText"
-                    name="titleText"
-                    value={settings.titleText}
-                    onChange={handleInputChange}
-                    placeholder="WorkDo"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t("Application title displayed in the browser tab")}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <Label htmlFor="footerText">{t("Footer Text")}</Label>
-                  <Input
-                    id="footerText"
-                    name="footerText"
-                    value={settings.footerText}
-                    onChange={handleInputChange}
-                    placeholder="© 2024 WorkDo. All rights reserved."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t("Text displayed in the footer")}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Theme Section */}
-          {activeSection === 'theme' && (
-            <div className="space-y-6">
-              <div className="flex flex-col space-y-8">
-                {/* Theme Color Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <Palette className="h-5 w-5 mr-2 text-muted-foreground" />
-                    <h3 className="text-base font-medium">{t("Theme Color")}</h3>
-                  </div>
-                  <Separator className="my-2" />
-
-                  <div className="grid grid-cols-6 gap-2">
-                    {Object.entries({ blue: '#3b82f6', green: '#10b981', purple: '#8b5cf6', orange: '#f97316', red: '#ef4444' }).map(([color, hex]) => (
-                      <Button
-                        key={color}
-                        type="button"
-                        variant={settings.themeColor === color ? "default" : "outline"}
-                        className="h-8 w-full p-0 relative"
-                        style={{ backgroundColor: settings.themeColor === color ? hex : 'transparent' }}
-                        onClick={() => handleThemeColorChange(color as ThemeColor)}
-                      >
-                        <span
-                          className="absolute inset-1 rounded-sm"
-                          style={{ backgroundColor: hex }}
+              {/* Logos Section */}
+              {activeSection === 'logos' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label>{t("Logo (Dark Mode)")}</Label>
+                      <div className="flex flex-col gap-3">
+                        <div className="border rounded-md p-4 flex items-center justify-center bg-muted/30 dark:bg-white h-32">
+                          {settings.logoDark ? (
+                            <img
+                              src={(() => {
+                                const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
+                                return settings.logoDark.startsWith('http') ? settings.logoDark : `${appUrl}/${settings.logoDark.replace(/^\//, '')}`;
+                              })()}
+                              alt="Dark Logo"
+                              className="max-h-full max-w-full object-contain"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = 'images/default/image-not-found.jpg';
+                              }}
+                            />
+                          ) : (
+                            <div className="text-muted-foreground flex flex-col items-center gap-2">
+                              <div className="h-12 w-24 bg-muted flex items-center justify-center rounded border border-dashed">
+                                <span className="font-semibold text-muted-foreground">{t("Logo")}</span>
+                              </div>
+                              <span className="text-xs">No logo selected</span>
+                            </div>
+                          )}
+                        </div>
+                        <MediaPicker
+                          label=""
+                          value={settings.logoDark}
+                          onChange={(url) => handleMediaSelect('logoDark', url)}
+                          placeholder="Select dark mode logo..."
+                          showPreview={false}
                         />
-                      </Button>
-                    ))}
-                    <Button
-                      type="button"
-                      variant={settings.themeColor === 'custom' ? "default" : "outline"}
-                      className="h-8 w-full p-0 relative"
-                      style={{ backgroundColor: settings.themeColor === 'custom' ? settings.customColor : 'transparent' }}
-                      onClick={() => handleThemeColorChange('custom')}
-                    >
-                      <span
-                        className="absolute inset-1 rounded-sm"
-                        style={{ backgroundColor: settings.customColor }}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label>{t("Logo (Light Mode)")}</Label>
+                      <div className="flex flex-col gap-3">
+                        <div className="border rounded-md p-4 flex items-center justify-center bg-black h-32">
+                          {settings.logoLight ? (
+                            <img
+                              src={(() => {
+                                const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
+                                return settings.logoLight.startsWith('http') ? settings.logoLight : `${appUrl}/${settings.logoLight.replace(/^\//, '')}`;
+                              })()}
+                              alt="Light Logo"
+                              className="max-h-full max-w-full object-contain"
+                            />
+                          ) : (
+                            <div className="text-muted-foreground flex flex-col items-center gap-2">
+                              <div className="h-12 w-24 bg-muted flex items-center justify-center rounded border border-dashed">
+                                <span className="font-semibold text-muted-foreground">{t("Logo")}</span>
+                              </div>
+                              <span className="text-xs">No logo selected</span>
+                            </div>
+                          )}
+                        </div>
+                        <MediaPicker
+                          label=""
+                          value={settings.logoLight}
+                          onChange={(url) => handleMediaSelect('logoLight', url)}
+                          placeholder="Select light mode logo..."
+                          showPreview={false}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label>{t("Favicon")}</Label>
+                      <div className="flex flex-col gap-3">
+                        <div className="border rounded-md p-4 flex items-center justify-center bg-muted/30 h-20">
+                          {settings.favicon ? (
+                            <img
+                              src={(() => {
+                                const appUrl = (window as any).__APP_URL__ || currentGlobalSettings?.base_url || window.location.origin;
+                                return settings.favicon.startsWith('http') ? settings.favicon : `${appUrl}/${settings.favicon.replace(/^\//, '')}`;
+                              })()}
+                              alt="Favicon"
+                              className="h-16 w-16 object-contain"
+                            />
+                          ) : (
+                            <div className="text-muted-foreground flex flex-col items-center gap-1">
+                              <div className="h-10 w-10 bg-muted flex items-center justify-center rounded border border-dashed">
+                                <span className="font-semibold text-xs text-muted-foreground">{t("Icon")}</span>
+                              </div>
+                              <span className="text-xs">No favicon selected</span>
+                            </div>
+                          )}
+                        </div>
+                        <MediaPicker
+                          label=""
+                          value={settings.favicon}
+                          onChange={(url) => handleMediaSelect('favicon', url)}
+                          placeholder="Select favicon..."
+                          showPreview={false}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Text Section */}
+              {activeSection === 'text' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="space-y-3">
+                      <Label required htmlFor="titleText">{t("Title Text")}</Label>
+                      <Input
+                      required
+                        id="titleText"
+                        name="titleText"
+                        value={settings.titleText}
+                        onChange={handleInputChange}
+                        placeholder="WorkDo"
                       />
-                    </Button>
-                  </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t("Application title displayed in the browser tab")}
+                      </p>
+                    </div>
 
-                  {settings.themeColor === 'custom' && (
-                    <div className="space-y-2 mt-4">
-                      <Label htmlFor="customColor">{t("Custom Color")}</Label>
-                      <div className="flex gap-2">
-                        <div className="relative">
-                          <Input
-                            id="colorPicker"
-                            type="color"
-                            value={settings.customColor}
-                            onChange={(e) => handleCustomColorChange(e.target.value)}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                          />
-                          <div
-                            className="w-10 h-10 rounded border cursor-pointer"
+                    <div className="space-y-3">
+                      <Label required htmlFor="footerText">{t("Footer Text")}</Label>
+                      <Input
+                      required
+                        id="footerText"
+                        name="footerText"
+                        value={settings.footerText}
+                        onChange={handleInputChange}
+                        placeholder="© 2026 WorkDo. All rights reserved."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t("Text displayed in the footer")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Theme Section */}
+              {activeSection === 'theme' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col space-y-8">
+                    {/* Theme Color Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center">
+                        <Palette className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <h3 className="text-base font-medium">{t("Theme Color")}</h3>
+                      </div>
+                      <Separator className="my-2" />
+
+                      <div className="grid grid-cols-6 gap-2">
+                        {Object.entries({ blue: '#3b82f6', green: '#10B77F', purple: '#8b5cf6', orange: '#f97316', red: '#ef4444' }).map(([color, hex]) => (
+                          <Button
+                            key={color}
+                            type="button"
+                            variant={settings.themeColor === color ? "default" : "outline"}
+                            className="h-8 w-full p-0 relative"
+                            style={{ backgroundColor: settings.themeColor === color ? hex : 'transparent' }}
+                            onClick={() => handleThemeColorChange(color as ThemeColor)}
+                          >
+                            <span
+                              className="absolute inset-1 rounded-sm"
+                              style={{ backgroundColor: hex }}
+                            />
+                          </Button>
+                        ))}
+                        <Button
+                          type="button"
+                          variant={settings.themeColor === 'custom' ? "default" : "outline"}
+                          className="h-8 w-full p-0 relative"
+                          style={{ backgroundColor: settings.themeColor === 'custom' ? settings.customColor : 'transparent' }}
+                          onClick={() => handleThemeColorChange('custom')}
+                        >
+                          <span
+                            className="absolute inset-1 rounded-sm"
                             style={{ backgroundColor: settings.customColor }}
                           />
+                        </Button>
+                      </div>
+
+                      {settings.themeColor === 'custom' && (
+                        <div className="space-y-2 mt-4">
+                          <Label htmlFor="customColor">{t("Custom Color")}</Label>
+                          <div className="flex gap-2">
+                            <div className="relative">
+                              <Input
+                                id="colorPicker"
+                                type="color"
+                                value={settings.customColor}
+                                onChange={(e) => handleCustomColorChange(e.target.value)}
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                              />
+                              <div
+                                className="w-10 h-10 rounded border cursor-pointer"
+                                style={{ backgroundColor: settings.customColor }}
+                              />
+                            </div>
+                            <Input
+                              id="customColor"
+                              name="customColor"
+                              type="text"
+                              value={settings.customColor}
+                              onChange={(e) => handleCustomColorChange(e.target.value)}
+                              placeholder="#3b82f6"
+                            />
+                          </div>
                         </div>
-                        <Input
-                          id="customColor"
-                          name="customColor"
-                          type="text"
-                          value={settings.customColor}
-                          onChange={(e) => handleCustomColorChange(e.target.value)}
-                          placeholder="#3b82f6"
-                        />
+                      )}
+                    </div>
+
+                    {/* Sidebar Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center">
+                        <SidebarIcon className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <h3 className="text-base font-medium">{t("Sidebar")}</h3>
+                      </div>
+                      <Separator className="my-2" />
+
+                      <div className="space-y-6">
+                        <div>
+                          <Label className="mb-2 block">{t("Sidebar Variant")}</Label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {['inset', 'floating', 'minimal'].map((variant) => (
+                              <Button
+                                key={variant}
+                                type="button"
+                                variant={settings.sidebarVariant === variant ? "default" : "outline"}
+                                className="h-10 justify-start"
+                                style={{
+                                  backgroundColor: settings.sidebarVariant === variant ?
+                                    (settings.themeColor === 'custom' ? settings.customColor : null) :
+                                    'transparent'
+                                }}
+                                onClick={() => handleSidebarVariantChange(variant)}
+                              >
+                                {variant.charAt(0).toUpperCase() + variant.slice(1)}
+                                {settings.sidebarVariant === variant && (
+                                  <Check className="h-4 w-4 ml-2" />
+                                )}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="mb-2 block">{t("Sidebar Style")}</Label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {[
+                              { id: 'plain', name: 'Plain' },
+                              { id: 'colored', name: 'Colored' },
+                              { id: 'gradient', name: 'Gradient' }
+                            ].map((style) => (
+                              <Button
+                                key={style.id}
+                                type="button"
+                                variant={settings.sidebarStyle === style.id ? "default" : "outline"}
+                                className="h-10 justify-start"
+                                style={{
+                                  backgroundColor: settings.sidebarStyle === style.id ?
+                                    (settings.themeColor === 'custom' ? settings.customColor : null) :
+                                    'transparent'
+                                }}
+                                onClick={() => handleSidebarStyleChange(style.id)}
+                              >
+                                {style.name}
+                                {settings.sidebarStyle === style.id && (
+                                  <Check className="h-4 w-4 ml-2" />
+                                )}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Sidebar Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <SidebarIcon className="h-5 w-5 mr-2 text-muted-foreground" />
-                    <h3 className="text-base font-medium">{t("Sidebar")}</h3>
-                  </div>
-                  <Separator className="my-2" />
+                    {/* Layout Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center">
+                        <Layout className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <h3 className="text-base font-medium">{t("Layout")}</h3>
+                      </div>
+                      <Separator className="my-2" />
 
-                  <div className="space-y-6">
-                    <div>
-                      <Label className="mb-2 block">{t("Sidebar Variant")}</Label>
-                      <div className="grid grid-cols-3 gap-3">
-                        {['inset', 'floating', 'minimal'].map((variant) => (
+                      <div className="space-y-2">
+                        <Label className="mb-2 block">{t("Layout Direction")}</Label>
+                        <div className="grid grid-cols-2 gap-2">
                           <Button
-                            key={variant}
                             type="button"
-                            variant={settings.sidebarVariant === variant ? "default" : "outline"}
+                            variant={settings.layoutDirection === "left" ? "default" : "outline"}
                             className="h-10 justify-start"
                             style={{
-                              backgroundColor: settings.sidebarVariant === variant ?
+                              backgroundColor: settings.layoutDirection === "left" ?
                                 (settings.themeColor === 'custom' ? settings.customColor : null) :
                                 'transparent'
                             }}
-                            onClick={() => handleSidebarVariantChange(variant)}
+                            onClick={() => handleLayoutDirectionChange("left")}
                           >
-                            {variant.charAt(0).toUpperCase() + variant.slice(1)}
-                            {settings.sidebarVariant === variant && (
+                            {t("Left-to-Right")}
+                            {settings.layoutDirection === "left" && (
                               <Check className="h-4 w-4 ml-2" />
                             )}
                           </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">{t("Sidebar Style")}</Label>
-                      <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { id: 'plain', name: 'Plain' },
-                          { id: 'colored', name: 'Colored' },
-                          { id: 'gradient', name: 'Gradient' }
-                        ].map((style) => (
                           <Button
-                            key={style.id}
                             type="button"
-                            variant={settings.sidebarStyle === style.id ? "default" : "outline"}
+                            variant={settings.layoutDirection === "right" ? "default" : "outline"}
                             className="h-10 justify-start"
                             style={{
-                              backgroundColor: settings.sidebarStyle === style.id ?
+                              backgroundColor: settings.layoutDirection === "right" ?
                                 (settings.themeColor === 'custom' ? settings.customColor : null) :
                                 'transparent'
                             }}
-                            onClick={() => handleSidebarStyleChange(style.id)}
+                            onClick={() => handleLayoutDirectionChange("right")}
                           >
-                            {style.name}
-                            {settings.sidebarStyle === style.id && (
+                            {t("Right-to-Left")}
+                            {settings.layoutDirection === "right" && (
                               <Check className="h-4 w-4 ml-2" />
                             )}
                           </Button>
-                        ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mode Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center">
+                        <Moon className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <h3 className="text-base font-medium">{t("Theme Mode")}</h3>
+                      </div>
+                      <Separator className="my-2" />
+
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <Button
+                            type="button"
+                            variant={settings.themeMode === "light" ? "default" : "outline"}
+                            className="h-10 justify-start"
+                            style={{
+                              backgroundColor: settings.themeMode === "light" ?
+                                (settings.themeColor === 'custom' ? settings.customColor : null) :
+                                'transparent'
+                            }}
+                            onClick={() => handleThemeModeChange("light")}
+                          >
+                            {t("Light")}
+                            {settings.themeMode === "light" && (
+                              <Check className="h-4 w-4 ml-2" />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={settings.themeMode === "dark" ? "default" : "outline"}
+                            className="h-10 justify-start"
+                            style={{
+                              backgroundColor: settings.themeMode === "dark" ?
+                                (settings.themeColor === 'custom' ? settings.customColor : null) :
+                                'transparent'
+                            }}
+                            onClick={() => handleThemeModeChange("dark")}
+                          >
+                            {t("Dark")}
+                            {settings.themeMode === "dark" && (
+                              <Check className="h-4 w-4 ml-2" />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={settings.themeMode === "system" ? "default" : "outline"}
+                            className="h-10 justify-start"
+                            style={{
+                              backgroundColor: settings.themeMode === "system" ?
+                                (settings.themeColor === 'custom' ? settings.customColor : null) :
+                                'transparent'
+                            }}
+                            onClick={() => handleThemeModeChange("system")}
+                          >
+                            {t("System")}
+                            {settings.themeMode === "system" && (
+                              <Check className="h-4 w-4 ml-2" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Layout Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <Layout className="h-5 w-5 mr-2 text-muted-foreground" />
-                    <h3 className="text-base font-medium">{t("Layout")}</h3>
-                  </div>
-                  <Separator className="my-2" />
-
-                  <div className="space-y-2">
-                    <Label className="mb-2 block">{t("Layout Direction")}</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant={settings.layoutDirection === "left" ? "default" : "outline"}
-                        className="h-10 justify-start"
-                        style={{
-                          backgroundColor: settings.layoutDirection === "left" ?
-                            (settings.themeColor === 'custom' ? settings.customColor : null) :
-                            'transparent'
-                        }}
-                        onClick={() => handleLayoutDirectionChange("left")}
-                      >
-                        {t("Left-to-Right")}
-                        {settings.layoutDirection === "left" && (
-                          <Check className="h-4 w-4 ml-2" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={settings.layoutDirection === "right" ? "default" : "outline"}
-                        className="h-10 justify-start"
-                        style={{
-                          backgroundColor: settings.layoutDirection === "right" ?
-                            (settings.themeColor === 'custom' ? settings.customColor : null) :
-                            'transparent'
-                        }}
-                        onClick={() => handleLayoutDirectionChange("right")}
-                      >
-                        {t("Right-to-Left")}
-                        {settings.layoutDirection === "right" && (
-                          <Check className="h-4 w-4 ml-2" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mode Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <Moon className="h-5 w-5 mr-2 text-muted-foreground" />
-                    <h3 className="text-base font-medium">{t("Theme Mode")}</h3>
-                  </div>
-                  <Separator className="my-2" />
-
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        type="button"
-                        variant={settings.themeMode === "light" ? "default" : "outline"}
-                        className="h-10 justify-start"
-                        style={{
-                          backgroundColor: settings.themeMode === "light" ?
-                            (settings.themeColor === 'custom' ? settings.customColor : null) :
-                            'transparent'
-                        }}
-                        onClick={() => handleThemeModeChange("light")}
-                      >
-                        {t("Light")}
-                        {settings.themeMode === "light" && (
-                          <Check className="h-4 w-4 ml-2" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={settings.themeMode === "dark" ? "default" : "outline"}
-                        className="h-10 justify-start"
-                        style={{
-                          backgroundColor: settings.themeMode === "dark" ?
-                            (settings.themeColor === 'custom' ? settings.customColor : null) :
-                            'transparent'
-                        }}
-                        onClick={() => handleThemeModeChange("dark")}
-                      >
-                        {t("Dark")}
-                        {settings.themeMode === "dark" && (
-                          <Check className="h-4 w-4 ml-2" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={settings.themeMode === "system" ? "default" : "outline"}
-                        className="h-10 justify-start"
-                        style={{
-                          backgroundColor: settings.themeMode === "system" ?
-                            (settings.themeColor === 'custom' ? settings.customColor : null) :
-                            'transparent'
-                        }}
-                        onClick={() => handleThemeModeChange("system")}
-                      >
-                        {t("System")}
-                        {settings.themeMode === "system" && (
-                          <Check className="h-4 w-4 ml-2" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
+          </CardContent>
+        </Card>
             </div>
-          )}
-        </div>
 
         {/* Preview Column */}
         <div className="lg:col-span-1">

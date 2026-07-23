@@ -24,15 +24,27 @@ class TimerController extends Controller
 
         $user = auth()->user();
 
-        // Prevent starting if timer is already active
-        if ($user->timer_active) {
-            return response()->json(['error' => __('Timer is already active')], 400);
-        }
-
         // Validate that user has access to the project
         $project = Project::find($validated['project_id']);
         if (!$project || !$user->canAccessWorkspace($project->workspace)) {
             return response()->json(['error' => __('Access denied to this project')], 403);
+        }
+
+        // Check if timer is active in ANY workspace
+        if ($user->timer_active) {
+            $timerProject = Project::find($user->timer_project_id);
+            if ($timerProject) {
+                if ($timerProject->workspace_id != $user->current_workspace_id) {
+                    // Timer is running in a different workspace - stop it first
+                    $this->forceStopTimer($user);
+                } else {
+                    // Timer is already running in current workspace
+                    return response()->json(['error' => __('Timer is already active')], 400);
+                }
+            } else {
+                // Timer project not found - reset timer
+                $this->forceStopTimer($user);
+            }
         }
 
         try {
@@ -144,7 +156,17 @@ class TimerController extends Controller
         $user = auth()->user();
 
         if (!$user->timer_active) {
-            return response()->json(['active' => false]);
+            return $request->inertia() 
+                ? back()->with('timer', ['active' => false])
+                : response()->json(['active' => false]);
+        }
+
+        // Check if timer belongs to current workspace
+        $project = Project::find($user->timer_project_id);
+        if (!$project || $project->workspace_id != $user->current_workspace_id) {
+            return $request->inertia()
+                ? back()->with('timer', ['active' => false])
+                : response()->json(['active' => false]);
         }
 
         $elapsedSeconds = $user->timer_elapsed_seconds;
@@ -226,5 +248,26 @@ class TimerController extends Controller
                 $entry->timesheet->calculateTotals();
             }
         }
+    }
+
+    private function forceStopTimer(User $user)
+    {
+        $totalSeconds = $user->timer_elapsed_seconds;
+        if ($user->timer_started_at) {
+            $startTime = Carbon::parse($user->timer_started_at);
+            $totalSeconds += $startTime->diffInSeconds(now());
+        }
+        $hours = round($totalSeconds / 3600, 2);
+        $this->updateTimesheetEntry($user, $hours);
+        
+        $user->update([
+            'timer_active' => false,
+            'timer_project_id' => null,
+            'timer_task_id' => null,
+            'timer_started_at' => null,
+            'timer_description' => null,
+            'timer_elapsed_seconds' => 0,
+            'timer_entry_id' => null
+        ]);
     }
 }

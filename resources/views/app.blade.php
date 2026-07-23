@@ -125,9 +125,14 @@
 
             // Set initial locale for i18next
             fetch('{{ route('initial-locale') }}')
-                .then(response => response.text())
+                .then(response => {
+                    if (!response.ok) throw new Error('Locale fetch failed: ' + response.status);
+                    return response.text();
+                })
                 .then(locale => {
-                    window.initialLocale = locale;
+                    const trimmed = locale.trim();
+                    // Validate it looks like a locale string (e.g. 'en', 'ar', 'zh-CN')
+                    window.initialLocale = /^[a-z]{2,5}(-[A-Za-z]{2,4})?$/.test(trimmed) ? trimmed : 'en';
                 })
                 .catch(() => {
                     window.initialLocale = 'en';

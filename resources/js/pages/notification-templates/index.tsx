@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Search, Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -44,7 +45,12 @@ interface Props {
 export default function NotificationTemplatesIndex({ templates, filters: pageFilters = {} }: Props) {
   const { t } = useTranslation()
   const [searchTerm, setSearchTerm] = useState(pageFilters.search || '')
+  const [activeType, setActiveType] = useState(pageFilters.type || 'slack')
 
+  const notificationTypes = [
+    { id: 'slack', label: 'Slack' },
+    { id: 'telegram', label: 'Telegram' },
+  ]
   const handleAction = (action: string, item: NotificationTemplate) => {
     if (action === 'view') {
       router.get(route('notification-templates.show', item.id))
@@ -58,35 +64,56 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
 
   const applyFilters = () => {
     const params: any = { page: 1 }
-    
+
     if (searchTerm) {
       params.search = searchTerm
     }
-    
+
+    params.type = activeType
+
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page
     }
-    
+
+    router.get(route('notification-templates.index'), params, { preserveState: true, preserveScroll: true })
+  }
+
+  const handleTypeChange = (type: string) => {
+    setActiveType(type)
+    const params: any = { page: 1 }
+
+    if (searchTerm) {
+      params.search = searchTerm
+    }
+
+    params.type = type
+
+    if (pageFilters.per_page) {
+      params.per_page = pageFilters.per_page
+    }
+
     router.get(route('notification-templates.index'), params, { preserveState: true, preserveScroll: true })
   }
 
   const handleSort = (field: string) => {
     const direction = pageFilters.sort_field === field && pageFilters.sort_direction === 'asc' ? 'desc' : 'asc'
-    
-    const params: any = { 
-      sort_field: field, 
-      sort_direction: direction, 
-      page: 1 
+
+    const params: any = {
+      sort_field: field,
+      sort_direction: direction,
+      page: 1
     }
-    
+
     if (searchTerm) {
       params.search = searchTerm
     }
-    
+
+    params.type = activeType
+
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page
     }
-    
+
     router.get(route('notification-templates.index'), params, { preserveState: true, preserveScroll: true })
   }
 
@@ -96,23 +123,23 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
   ]
 
   const columns = [
-    { 
-      key: 'name', 
-      label: t("Name"), 
+    {
+      key: 'name',
+      label: t("Name"),
       sortable: true
     }
   ]
 
   return (
-    <PageTemplate 
-      title={t("Notification Templates")} 
+    <PageTemplate
+      title={t("Notification Templates")}
       url={route('notification-templates.index')}
       breadcrumbs={breadcrumbs}
       noPadding
     >
       <Head title={t("Notification Templates")} />
-      
-      <div className="bg-white rounded-lg shadow mb-4">
+
+      <div className="bg-white rounded-lg border shadow mb-4">
         <div className="p-4">
           <div className="flex items-center justify-between">
             <form onSubmit={handleSearch} className="flex gap-2">
@@ -130,31 +157,42 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
                 {t("Search")}
               </Button>
             </form>
-            
-            <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground">{t("Per Page:")}</Label>
-              <Select 
-                value={pageFilters.per_page?.toString() || "10"} 
-                onValueChange={(value) => {
-                  const params: any = { page: 1, per_page: parseInt(value) }
-                  
-                  if (searchTerm) {
-                    params.search = searchTerm
-                  }
-                  
-                  router.get(route('notification-templates.index'), params, { preserveState: true, preserveScroll: true })
-                }}
-              >
-                <SelectTrigger className="w-16 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="flex items-center gap-4">
+              <Tabs value={activeType} onValueChange={handleTypeChange}>
+                <TabsList className="grid w-fit grid-cols-2">
+                  <TabsTrigger value="slack" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{t("Slack")}</TabsTrigger>
+                  <TabsTrigger value="telegram" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{t("Telegram")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">{t("Per Page:")}</Label>
+                <Select
+                  value={pageFilters.per_page?.toString() || "10"}
+                  onValueChange={(value) => {
+                    const params: any = { page: 1, per_page: parseInt(value) }
+
+                    if (searchTerm) {
+                      params.search = searchTerm
+                    }
+
+                    params.type = activeType
+
+                    router.get(route('notification-templates.index'), params, { preserveState: true, preserveScroll: true })
+                  }}
+                >
+                  <SelectTrigger className="w-16 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>
@@ -164,10 +202,10 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-gray-50">
+              <tr className="bg-[#F0F0F1] dark:bg-gray-800 border-b">
                 {columns.map((column) => (
-                  <th 
-                    key={column.key} 
+                  <th
+                    key={column.key}
                     className="px-4 py-3 text-left font-medium text-gray-500 cursor-pointer hover:bg-gray-100"
                     onClick={() => column.sortable && handleSort(column.key)}
                   >
@@ -197,9 +235,9 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
                   <td className="px-4 py-3 text-right">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleAction('view', template)}
                           className="text-blue-500 hover:text-blue-700"
                         >
@@ -211,7 +249,7 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
                   </td>
                 </tr>
               ))}
-              
+
               {(!templates?.data || templates.data.length === 0) && (
                 <tr>
                   <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-gray-500">
@@ -223,16 +261,16 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
           </table>
         </div>
 
-        <div className="p-4 border-t flex items-center justify-between">
+        <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
           <div className="text-sm text-muted-foreground">
             {t("Showing")} <span className="font-medium">{templates?.from || 0}</span> {t("to")} <span className="font-medium">{templates?.to || 0}</span> {t("of")} <span className="font-medium">{templates?.total || 0}</span> {t("templates")}
           </div>
-          
+
           <div className="flex gap-1">
             {templates?.links?.map((link: any, i: number) => {
               const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;"
               const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "")
-              
+
               return (
                 <Button
                   key={i}
@@ -240,7 +278,14 @@ export default function NotificationTemplatesIndex({ templates, filters: pageFil
                   size={isTextLink ? "sm" : "icon"}
                   className={isTextLink ? "px-3" : "h-8 w-8"}
                   disabled={!link.url}
-                  onClick={() => link.url && router.get(link.url)}
+                  onClick={() => {
+                    if (link.url) {
+                      const url = new URL(link.url, window.location.origin)
+                      url.searchParams.set('type', activeType)
+                      if (searchTerm) url.searchParams.set('search', searchTerm)
+                      router.get(url.pathname + url.search)
+                    }
+                  }}
                 >
                   {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                 </Button>

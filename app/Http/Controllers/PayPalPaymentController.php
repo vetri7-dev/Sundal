@@ -72,4 +72,35 @@ class PayPalPaymentController extends Controller
             return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
         }
     }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01',
+                'order_id' => 'required|string',
+                'payment_id' => 'required|string',
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            
+            Payment::create([
+                'invoice_id' => $invoice->id,
+                'amount' => $request->amount,
+                'payment_method' => 'paypal',
+                'payment_date' => now(),
+                'created_by' => $invoice->created_by
+            ]);
+            
+            return redirect()->route('invoices.payment', $invoice->payment_token)
+                ->with('success', 'Payment processed successfully.');
+            
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return back()->withErrors(['error' => 'Invoice not found. Please check the link and try again.']);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
+        }
+    }
 }

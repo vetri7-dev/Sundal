@@ -126,6 +126,243 @@ class FedaPayPaymentController extends Controller
         }
     }
 
+    public function processInvoicePayment(Request $request)
+    {
+        $request->validate([
+            'invoice_token' => 'required|string',
+            'amount' => 'required|numeric|min:0',
+            'transaction_id' => 'required|string',
+        ]);
+
+        try {
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            $settings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['fedapay_secret_key'])) {
+                return back()->withErrors(['error' => 'FedaPay not configured']);
+            }
+
+            $this->configureFedaPay($settings);
+
+            $transaction = Transaction::retrieve($request->transaction_id);
+
+            if ($transaction->status === 'approved') {
+                $invoice->createPaymentRecord($request->amount, 'fedapay', $request->transaction_id);
+
+                return redirect()->route('invoices.show', $invoice->id)
+                    ->with('success', __('Payment successful!'));
+            }
+
+            return back()->withErrors(['error' => __('Payment failed or cancelled')]);
+
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => __('Payment processing failed')]);
+        }
+    }
+
+    public function createInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            $paymentSettings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['fedapay_secret_key', 'fedapay_mode', 'is_fedapay_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (empty($paymentSettings['fedapay_secret_key']) || $paymentSettings['is_fedapay_enabled'] !== '1') {
+                return response()->json(['error' => 'FedaPay payment not configured'], 400);
+            }
+
+            $this->configureFedaPay($paymentSettings);
+
+            $transaction = Transaction::create([
+                'description' => 'Invoice Payment - ' . $invoice->invoice_number,
+                'amount' => $request->amount * 100,
+                'currency' => ['iso' => $invoice->currency ?? 'XOF'],
+                'callback_url' => route('fedapay.invoice.callback'),
+                'customer' => [
+                    'firstname' => 'Customer',
+                    'email' => 'customer@example.com',
+                ],
+                'custom_metadata' => [
+                    'invoice_token' => $invoice->payment_token,
+                    'invoice_id' => $invoice->id,
+                    'amount' => $request->amount,
+                ]
+            ]);
+
+            $token = $transaction->generateToken();
+
+            return response()->json([
+                'success' => true,
+                'payment_url' => $token->url,
+                'transaction_id' => $transaction->id,
+                'token' => $token->token
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceCallback(Request $request)
+    {
+        try {
+            $transactionId = $request->input('id');
+
+            if ($transactionId) {
+                $allSettings = \App\Models\PaymentSetting::whereIn('key', ['fedapay_secret_key', 'fedapay_mode'])
+                    ->get()
+                    ->groupBy('user_id');
+
+                foreach ($allSettings as $userId => $userSettings) {
+                    $settings = $userSettings->pluck('value', 'key')->toArray();
+
+                    if (isset($settings['fedapay_secret_key'])) {
+                        try {
+                            $this->configureFedaPay($settings);
+                            $transaction = Transaction::retrieve($transactionId);
+
+                            if ($transaction->status === 'approved') {
+                                $metadata = $transaction->custom_metadata;
+                                $invoiceToken = $metadata['invoice_token'];
+                                $amount = $metadata['amount'];
+                                $invoiceId = $metadata['invoice_id'];
+
+                                $invoice = \App\Models\Invoice::find($invoiceId);
+
+                                if ($invoice) {
+                                    $invoice->createPaymentRecord($amount, 'fedapay', $transactionId);
+
+                                    return redirect()->route('invoices.show', $invoice->id)
+                                        ->with('success', 'Payment completed successfully!');
+                                }
+                            }
+                            break;
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            return redirect()->route('invoices.index')
+                ->with('error', 'Payment verification failed.');
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Callback processing failed'], 500);
+        }
+    }
+
+    public function createInvoicePaymentFromLink(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            $paymentSettings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['fedapay_secret_key', 'fedapay_mode', 'is_fedapay_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (empty($paymentSettings['fedapay_secret_key']) || $paymentSettings['is_fedapay_enabled'] !== '1') {
+                return response()->json(['error' => 'FedaPay payment not configured'], 400);
+            }
+
+            $this->configureFedaPay($paymentSettings);
+
+            $transaction = Transaction::create([
+                'description' => 'Invoice Payment - ' . $invoice->invoice_number,
+                'amount' => $request->amount * 100,
+                'currency' => ['iso' => $invoice->currency ?? 'XOF'],
+                'callback_url' => route('fedapay.invoice.link.callback'),
+                'customer' => [
+                    'firstname' => 'Customer',
+                    'email' => 'customer@example.com',
+                ],
+                'custom_metadata' => [
+                    'invoice_token' => $invoice->payment_token,
+                    'invoice_id' => $invoice->id,
+                    'amount' => $request->amount,
+                ]
+            ]);
+
+            $token = $transaction->generateToken();
+
+            return response()->json([
+                'success' => true,
+                'payment_url' => $token->url,
+                'transaction_id' => $transaction->id,
+                'token' => $token->token
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceLinkCallback(Request $request)
+    {
+        try {
+            $transactionId = $request->input('id');
+
+            if ($transactionId) {
+                $allSettings = \App\Models\PaymentSetting::whereIn('key', ['fedapay_secret_key', 'fedapay_mode'])
+                    ->get()
+                    ->groupBy('user_id');
+
+                foreach ($allSettings as $userId => $userSettings) {
+                    $settings = $userSettings->pluck('value', 'key')->toArray();
+
+                    if (isset($settings['fedapay_secret_key'])) {
+                        try {
+                            $this->configureFedaPay($settings);
+                            $transaction = Transaction::retrieve($transactionId);
+
+                            if ($transaction->status === 'approved') {
+                                $metadata = $transaction->custom_metadata;
+                                $invoiceToken = $metadata['invoice_token'];
+                                $amount = $metadata['amount'];
+                                $invoiceId = $metadata['invoice_id'];
+
+                                $invoice = \App\Models\Invoice::find($invoiceId);
+
+                                if ($invoice) {
+                                    $invoice->createPaymentRecord($amount, 'fedapay', $transactionId);
+
+                                    return redirect()->route('invoices.payment', $invoiceToken)->with('success', 'Payment completed successfully.');
+                                }
+                            }
+                            break;
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            return redirect()->route('invoices.payment', 'invalid')
+                ->with('error', 'Payment verification failed.');
+
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', 'invalid')
+                ->with('error', 'Payment processing failed.');
+        }
+    }
+
     private function configureFedaPay($settings)
     {
         FedaPay::setApiKey($settings['fedapay_secret_key']);

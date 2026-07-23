@@ -131,7 +131,15 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'csrf_token' => csrf_token(),
             'auth' => [
-                'user' => $request->user() ? $request->user()->loadMissing(['currentWorkspace', 'ownedWorkspaces', 'workspaces']) : null,
+                'user' => $request->user() ? array_merge(
+                    $request->user()->loadMissing(['currentWorkspace', 'ownedWorkspaces', 'workspaces'])->toArray(),
+                    [
+                        'avatar' => check_file($request->user()->avatar) ? get_file($request->user()->avatar) : get_file('avatars/avatar.png'),
+                        'workspace_role' => $request->user()->currentWorkspace
+                            ? $request->user()->currentWorkspace->getMemberRole($request->user())
+                            : null,
+                    ]
+                ) : null,
                 'roles' => fn() => $this->getUserRoles($request),
                 'permissions' => fn() => $this->getUserPermissions($request),
             ],
@@ -145,15 +153,35 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success'     => $request->session()->get('success'),
                 'error'       => $request->session()->get('error'),
+                'status'      => $request->session()->get('status'),
+                'statusType'  => $request->session()->get('statusType'),
                 'new_api_key' => $request->session()->get('new_api_key'),
             ],
             'globalSettings' => $globalSettings,
+            'userLanguage' => $request->user()?->lang ?? config('app.locale', 'en'),
+            'storageSettings' => $this->getStorageSettings($request),
+            'allowed_file_types' => getSetting('storage_file_types', 'jpg,jpeg,png,svg,gif,zip,txt,pdf,docx', null, null),
+            'max_file_size' => (int) getSetting('storage_max_file_size', 2048, null, null),
             'is_demo' => config('app.is_demo', false),
             'isDemoMode' => config('app.is_demo', false),
             'isSaasMode' => isSaasMode(),
             'is_saas' => isSaasMode()
 
         ];
+    }
+
+    private function getStorageSettings(Request $request): array
+    {
+        try {
+            $user = $request->user();
+            if (!$user) return ['storage_type' => 'local'];
+            $adminSettings = getAdminAllSetting();
+            return [
+                'storage_type' => $adminSettings['storage_type'] ?? 'local',
+            ];
+        } catch (\Exception $e) {
+            return ['storage_type' => 'local'];
+        }
     }
 
     /**

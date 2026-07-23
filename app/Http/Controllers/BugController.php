@@ -54,16 +54,45 @@ class BugController extends Controller
             $query->where('title', 'like', '%' . $request->search . '%');
         }
 
+        // Add sorting functionality
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        // Define allowed sort fields to prevent SQL injection
+        $allowedSortFields = [
+            'title',
+            'priority', 
+            'severity',
+            'created_at',
+            'updated_at'
+        ];
+        
+        if (in_array($sortField, $allowedSortFields)) {
+            $query->orderBy($sortField, $sortDirection);
+        } else {
+            $query->latest(); // Default sorting
+        }
+
         // Default to kanban view and get all data without pagination
         $view = $request->get('view', 'kanban');
 
         if ($view === 'kanban') {
             $bugs = $query->get();
         } else {
-            $perPage = $request->get('per_page', 20);
-            $perPage = in_array($perPage, [20, 50, 100]) ? $perPage : 20;
-            $bugs = $query->latest()->paginate($perPage);
+            $perPage = $request->get('per_page', 10);
+            $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 10;
+            $bugs = $query->paginate($perPage);
         }
+
+        // Process avatars for bugs
+        $bugCollection = ($bugs instanceof \Illuminate\Pagination\LengthAwarePaginator) ? $bugs->getCollection() : $bugs;
+        $bugCollection->each(function ($bug) {
+            if ($bug->assignedTo) {
+                $bug->assignedTo->avatar = check_file($bug->assignedTo->avatar)
+                    ? get_file($bug->assignedTo->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
 
         // Apply same access control to projects dropdown as used for bug filtering
         $projectsQuery = Project::forWorkspace($user->current_workspace_id)
@@ -113,7 +142,7 @@ class BugController extends Controller
             'members' => $members,
             'milestones' => $milestones,
             'filters' => array_merge(
-                $request->only(['project_id', 'status_id', 'priority', 'severity', 'assigned_to', 'search', 'per_page']),
+                $request->only(['project_id', 'status_id', 'priority', 'severity', 'assigned_to', 'search', 'per_page', 'sort_field', 'sort_direction']),
                 ['view' => $view]
             ),
             'project_name' => $projectName,
@@ -123,7 +152,7 @@ class BugController extends Controller
                 'update' => $this->checkPermission('bug_update'),
                 'delete' => $this->checkPermission('bug_delete'),
                 'change_status' => $this->checkPermission('bug_change_status'),
-                'assign_users' => $this->checkPermission('bug_assign_users'),
+                'assign_users' => $this->checkPermission('bug_assign'),
             ]
         ]);
     }
@@ -155,6 +184,11 @@ class BugController extends Controller
         $bug->comments->each(function ($comment) use ($currentUser) {
             $comment->can_update = $comment->canBeUpdatedBy($currentUser);
             $comment->can_delete = $comment->canBeDeletedBy($currentUser);
+            if ($comment->user) {
+                $comment->user->avatar = check_file($comment->user->avatar)
+                    ? get_file($comment->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
         });
 
         $bug->attachments->each(function ($attachment) use ($currentUser) {
@@ -186,7 +220,7 @@ class BugController extends Controller
                 'update' => $this->checkPermission('bug_update'),
                 'delete' => $this->checkPermission('bug_delete'),
                 'change_status' => $this->checkPermission('bug_change_status'),
-                'assign_users' => $this->checkPermission('bug_assign_users'),
+                'assign_users' => $this->checkPermission('bug_assign'),
             ]
         ]);
     }
@@ -246,7 +280,7 @@ class BugController extends Controller
 
             // Fire event for email notification if bug is assigned
             if ($validated['assigned_to']) {
-                $assignedUser = \App\Models\User::find($validated['assigned_to']);
+                $assignedUser = User::find($validated['assigned_to']);
                 if ($assignedUser) {
                     $bug->load('project');
                     if (!config('app.is_demo', true)) {

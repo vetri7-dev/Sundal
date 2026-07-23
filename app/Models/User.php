@@ -500,4 +500,33 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
             ProjectMember::where('user_id', $user->id)->delete();
         });
     }
+
+    public function planOrders()
+    {
+        return $this->hasMany(\App\Models\PlanOrder::class);
+    }
+
+    public function getCurrentWorkspaceRole(): ?string
+    {
+        if (!$this->current_workspace_id) return null;
+        $isOwner = \App\Models\Workspace::where('id', $this->current_workspace_id)
+            ->where('owner_id', $this->id)->exists();
+        if ($isOwner) return 'owner';
+        $member = \App\Models\WorkspaceMember::where('workspace_id', $this->current_workspace_id)
+            ->where('user_id', $this->id)->where('status', 'active')->first();
+        return $member?->role;
+    }
+
+    public function findWorkspaceWithActivePlan(): ?\App\Models\Workspace
+    {
+        $workspaces = $this->workspaces()
+            ->wherePivot('status', 'active')
+            ->where('workspaces.id', '!=', $this->current_workspace_id)
+            ->with('owner')->get();
+        foreach ($workspaces as $workspace) {
+            $owner = $workspace->owner;
+            if ($owner && !$owner->needsPlanSubscription()) return $workspace;
+        }
+        return null;
+    }
 }

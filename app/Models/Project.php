@@ -18,7 +18,7 @@ class Project extends Model
         'workspace_id', 'portfolio_id', 'title', 'description', 'client_id', 'status', 'priority',
         'start_date', 'deadline', 'estimated_hours', 'actual_hours', 'budget',
         'progress', 'is_public', 'portal_enabled', 'portal_token', 'portal_message',
-        'created_by', 'updated_by'
+        'created_by', 'updated_by', 'shared_settings', 'password'
     ];
 
     protected $casts = [
@@ -28,7 +28,8 @@ class Project extends Model
         'progress' => 'integer',
         'estimated_hours' => 'integer',
         'actual_hours' => 'integer',
-        'budget' => 'decimal:2'
+        'budget' => 'decimal:2',
+        'shared_settings' => 'array',
     ];
 
     // Relationships

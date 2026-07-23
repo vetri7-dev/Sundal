@@ -298,7 +298,7 @@ class XenditPaymentController extends Controller
                     );
                     
                     return redirect()->route('invoices.show', $invoice->id)
-                        ->with('success', __('Xendit payment completed successfully'));
+                        ->with('success', __('Payment completed successfully!'));
                 }
             }
             
@@ -306,6 +306,95 @@ class XenditPaymentController extends Controller
             
         } catch (\Exception $e) {
             return redirect()->route('home')->with('error', __('Payment processing failed'));
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_xendit_enabled']) || $settings['is_xendit_enabled'] !== '1') {
+                return response()->json(['error' => 'Xendit not enabled'], 400);
+            }
+
+            if (!isset($settings['xendit_api_key'])) {
+                return response()->json(['error' => 'Xendit not configured'], 400);
+            }
+
+            $externalId = 'invoice_' . $invoice->id . '_' . time();
+
+            $invoiceData = [
+                'external_id' => $externalId,
+                'amount' => $request->amount,
+                'description' => 'Invoice #' . $invoice->invoice_number . ' Payment',
+                'invoice_duration' => 86400,
+                'currency' => 'PHP',
+                'customer' => [
+                    'given_names' => 'Customer',
+                    'email' => 'customer@example.com'
+                ],
+                'success_redirect_url' => route('xendit.invoice.success.link', [
+                    'token' => $token,
+                    'amount' => $request->amount
+                ]),
+                'failure_redirect_url' => route('invoices.payment', $token)
+            ];
+
+            $response = \Http::withHeaders([
+                'Authorization' => 'Basic ' . base64_encode($settings['xendit_api_key'] . ':'),
+                'Content-Type' => 'application/json'
+            ])->post('https://api.xendit.co/v2/invoices', $invoiceData);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                if (isset($result['invoice_url'])) {
+                    return response()->json([
+                        'success' => true,
+                        'redirect_url' => $result['invoice_url']
+                    ]);
+                }
+            }
+            
+            return response()->json(['error' => 'Payment creation failed'], 500);
+            
+        } catch (ValidationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Payment processing failed. Please try again.'], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $amount = $request->input('amount');
+            $externalId = $request->input('external_id');
+            
+            if ($amount) {
+                $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+                
+                $invoice->createPaymentRecord(
+                    $amount,
+                    'xendit',
+                    $externalId ?: 'xendit_' . time()
+                );
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+            
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
         }
     }
 }

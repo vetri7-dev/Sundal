@@ -31,6 +31,12 @@ class WorkspaceInvitationController extends Controller
             'role' => 'required|in:manager,member,client,admin,user'
         ]);
 
+        // Check if email is properly configured before sending invitation
+        $userId = $workspace->owner_id ?? auth()->id();
+        if (!\App\Services\MailConfigService::isEmailConfigured($userId, $workspace->id)) {
+            return back()->with('error', __('Email configuration is incorrect or missing. Please configure your email settings properly to send workspace invitations via email.'));
+        }
+
         // Check if invitation already exists
         $existingInvitation = WorkspaceInvitation::where('workspace_id', $workspace->id)
             ->where('email', $request->email)
@@ -98,8 +104,10 @@ class WorkspaceInvitationController extends Controller
             }
 
             $existingUser = auth()->check();
+            $userExists = User::where('email', $invitation->email)->exists();
 
-            if (!$existingUser) {
+            // If user exists in DB but not authenticated, password is not required
+            if (!$existingUser && !$userExists) {
                 $request->validate([
                     'password' => 'required|min:8|confirmed'
                 ]);
@@ -110,13 +118,16 @@ class WorkspaceInvitationController extends Controller
                 $request->password
             );
 
+            // Log in the user if not already authenticated
             if (!$existingUser) {
                 auth()->login($result['user']);
             }
 
-            return redirect()->route('dashboard', ['user' => $result['user']->id]);
+            // Redirect to workspace
+            return redirect()->route('dashboard', ['workspace' => $result['workspace']->id])
+                ->with('success', __('Welcome to :workspace!', ['workspace' => $result['workspace']->name]));
         } catch (\Illuminate\Validation\ValidationException $e) {
-            throw $e; // Re-throw validation exceptions
+            throw $e;
         } catch (\Exception $e) {
             return back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -128,6 +139,12 @@ class WorkspaceInvitationController extends Controller
 
         if (!auth()->user()->canAccessWorkspace($invitation->workspace)) {
             abort(403);
+        }
+
+        // Check if email is properly configured before resending
+        $userId = $invitation->workspace->owner_id ?? auth()->id();
+        if (!\App\Services\MailConfigService::isEmailConfigured($userId, $invitation->workspace_id)) {
+            return back()->with('error', __('Email configuration is incorrect or missing. Please configure your email settings properly to send workspace invitations via email.'));
         }
 
         $invitation->load(['workspace', 'invitedBy']);

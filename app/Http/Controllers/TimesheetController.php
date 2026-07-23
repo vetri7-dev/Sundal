@@ -54,7 +54,7 @@ class TimesheetController extends Controller
         $role = $workspace->getMemberRole($user);
         
         if ($workspace->isOwner($user) || $role === 'company') {
-            // Owner or Company workspace role: show all data all access
+            // Owner or Company workspace role: show all projects
             return Project::where('workspace_id', $workspace->id)
                 ->with(['tasks' => function($query) {
                     $query->select('id', 'project_id', 'title');
@@ -62,7 +62,7 @@ class TimesheetController extends Controller
                 ->get();
         }
         
-        // Other roles (Member/Manager/Client): only assigned projects
+        // Other roles (Manager/Member/Client): only assigned projects
         return Project::where('workspace_id', $workspace->id)
             ->where(function($query) use ($user) {
                 $query->whereHas('members', function($q) use ($user) {
@@ -73,14 +73,8 @@ class TimesheetController extends Controller
                 })
                 ->orWhere('created_by', $user->id);
             })
-            ->with(['tasks' => function($query) use ($user) {
-                $query->select('id', 'project_id', 'title')
-                      ->where(function($taskQuery) use ($user) {
-                          $taskQuery->where('assigned_to', $user->id)
-                                    ->orWhereHas('members', function($q) use ($user) {
-                                        $q->where('user_id', $user->id);
-                                    });
-                      });
+            ->with(['tasks' => function($query) {
+                $query->select('id', 'project_id', 'title');
             }])
             ->get();
     }
@@ -113,9 +107,30 @@ class TimesheetController extends Controller
                         });
                     });
                 });
+            } elseif ($role === 'client') {
+                // Client: see timesheets from projects they're assigned to
+                $query->whereHas('entries', function($q) use ($user) {
+                    $q->whereHas('project', function($projectQuery) use ($user) {
+                        $projectQuery->whereHas('clients', function($clientQuery) use ($user) {
+                            $clientQuery->where('user_id', $user->id);
+                        });
+                    });
+                });
             } else {
-                // Member/Client: only their own created data
-                $query->where('user_id', $user->id);
+                // Member: see their own timesheets OR timesheets with tasks assigned to them
+                $query->where(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhereHas('entries', function($entryQuery) use ($user) {
+                          $entryQuery->whereHas('task', function($taskQuery) use ($user) {
+                              $taskQuery->where(function($tq) use ($user) {
+                                  $tq->where('assigned_to', $user->id)
+                                     ->orWhereHas('members', function($memberQuery) use ($user) {
+                                         $memberQuery->where('user_id', $user->id);
+                                     });
+                              });
+                          });
+                      });
+                });
             }
         }
 
@@ -169,11 +184,34 @@ class TimesheetController extends Controller
             $query->where('total_hours', '<=', $request->max_hours);
         }
 
-        // Handle per_page parameter with validation
-        $perPage = $request->get('per_page', 20);
-        $perPage = in_array($perPage, [20, 50, 100]) ? $perPage : 20;
+        // Handle sorting
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
         
-        $timesheets = $query->latest()->paginate($perPage)->withQueryString();
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'start_date', 'end_date', 'status', 'total_hours', 'billable_hours', 'user_id'];
+        if (!in_array($sortField, $allowedSortFields)) {
+            $sortField = 'created_at';
+        }
+        
+        if (!in_array($sortDirection, ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+        
+        // Apply sorting
+        if ($sortField === 'user_id') {
+            $query->join('users', 'timesheets.user_id', '=', 'users.id')
+                  ->orderBy('users.name', $sortDirection)
+                  ->select('timesheets.*');
+        } else {
+            $query->orderBy($sortField, $sortDirection);
+        }
+        
+        // Handle per_page parameter with validation
+        $perPage = $request->get('per_page', 12);
+        $perPage = in_array($perPage, [12, 24, 48, 100]) ? $perPage : 12;
+        
+        $timesheets = $query->paginate($perPage)->withQueryString();
 
         // Get members - only owner/manager can see all members
         $members = collect();
@@ -221,11 +259,49 @@ class TimesheetController extends Controller
                         ->orWhere('created_by', $user->id);
                     });
                 });
+            } elseif ($role === 'client') {
+                // Client: statistics from assigned projects
+                $statsQuery->whereHas('entries', function($q) use ($user) {
+                    $q->whereHas('project', function($projectQuery) use ($user) {
+                        $projectQuery->whereHas('clients', function($clientQuery) use ($user) {
+                            $clientQuery->where('user_id', $user->id);
+                        });
+                    });
+                });
+                $hoursQuery->whereHas('project', function($projectQuery) use ($user) {
+                    $projectQuery->whereHas('clients', function($clientQuery) use ($user) {
+                        $clientQuery->where('user_id', $user->id);
+                    });
+                });
             } else {
-                // Member/Client: only their own data statistics
-                $statsQuery->where('user_id', $user->id);
+                // Member: their own data OR tasks assigned to them
+                $statsQuery->where(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhereHas('entries', function($entryQuery) use ($user) {
+                          $entryQuery->whereHas('task', function($taskQuery) use ($user) {
+                              $taskQuery->where(function($tq) use ($user) {
+                                  $tq->where('assigned_to', $user->id)
+                                     ->orWhereHas('members', function($memberQuery) use ($user) {
+                                         $memberQuery->where('user_id', $user->id);
+                                     });
+                              });
+                          });
+                      });
+                });
                 $hoursQuery->whereHas('timesheet', function($q) use ($user) {
-                    $q->where('user_id', $user->id);
+                    $q->where(function($tq) use ($user) {
+                        $tq->where('user_id', $user->id)
+                           ->orWhereHas('entries', function($entryQuery) use ($user) {
+                               $entryQuery->whereHas('task', function($taskQuery) use ($user) {
+                                   $taskQuery->where(function($tQuery) use ($user) {
+                                       $tQuery->where('assigned_to', $user->id)
+                                              ->orWhereHas('members', function($memberQuery) use ($user) {
+                                                  $memberQuery->where('user_id', $user->id);
+                                              });
+                                   });
+                               });
+                           });
+                    });
                 });
             }
         }
@@ -238,6 +314,11 @@ class TimesheetController extends Controller
             'total_hours_this_week' => $hoursQuery->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()])->sum('hours')
         ];
 
+        // user.avatar
+        $timesheets->each(function ($timesheet) {
+            $timesheet->user->avatar = check_file($timesheet->user->avatar) ? get_file($timesheet->user->avatar) : get_file('avatars/avatar.png');
+        });
+
         return Inertia::render('timesheets/Index', [
             'timesheets' => $timesheets,
             'members' => $members,
@@ -246,7 +327,7 @@ class TimesheetController extends Controller
             'filters' => $request->only([
                 'status', 'user_id', 'search', 'project_id', 
                 'start_date', 'end_date', 'is_billable', 
-                'min_hours', 'max_hours', 'per_page', 'view'
+                'min_hours', 'max_hours', 'per_page', 'view', 'sort_field', 'sort_direction'
             ]),
             'permissions' => [
                 'canAccessAllData' => $this->canAccessAllData($user, $workspace),
@@ -276,14 +357,14 @@ class TimesheetController extends Controller
     public function show(Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_view');
-        
+                
         $timesheet->load(['entries.project', 'entries.task', 'entries.user', 'approvals.approver']);
         
         $projects = Project::where('workspace_id', auth()->user()->current_workspace_id)
             ->with('tasks')
             ->get();
-
-        return response()->json([
+                
+        return Inertia::render('timesheets/Show', [
             'timesheet' => $timesheet,
             'projects' => $projects,
             'permissions' => [
@@ -460,16 +541,35 @@ class TimesheetController extends Controller
     {
         $this->authorizePermission('timesheet_submit');
         
-        if (!$timesheet->canSubmit()) {
-            return back()->withErrors(['message' => 'Cannot submit timesheet']);
+        if ($timesheet->status !== 'draft') {
+            return back()->withErrors(['message' => 'Only draft timesheets can be submitted']);
+        }
+        
+        if (!$timesheet->entries()->exists()) {
+            return back()->withErrors(['message' => 'Cannot submit timesheet without entries']);
         }
 
-        $timesheet->update([
-            'status' => 'submitted',
-            'submitted_at' => now()
-        ]);
+        try {
+            $timesheet->update([
+                'status' => 'submitted',
+                'submitted_at' => now()
+            ]);
 
-        return back()->with('success', __('Timesheet submitted successfully!'));
+            // Create approval record for workspace owner only
+            $workspace = $timesheet->workspace;
+            
+            if ($workspace->owner) {
+                \App\Models\TimesheetApproval::create([
+                    'timesheet_id' => $timesheet->id,
+                    'approver_id' => $workspace->owner->id,
+                    'status' => 'pending'
+                ]);
+            }
+
+            return back()->with('success', __('Timesheet submitted successfully!'));
+        } catch (\Exception $e) {
+            return back()->withErrors(['message' => 'Failed to submit timesheet: ' . $e->getMessage()]);
+        }
     }
 
     public function approve(Timesheet $timesheet)
@@ -520,16 +620,29 @@ class TimesheetController extends Controller
         }
         
         $role = $workspace->getMemberRole($user);
+        $isDemoMode = config('app.is_demo', false);
         
         // Build query for entries for the selected date based on workspace role
         $query = TimesheetEntry::with(['project', 'task', 'timesheet'])
-            ->whereHas('timesheet', function($q) use ($workspace, $user, $role) {
+            ->whereHas('timesheet', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-                if (!($workspace->isOwner($user) || $role === 'admin')) {
-                    $q->where('user_id', $user->id);
-                }
-            })
-            ->whereDate('date', $date);
+            });
+        
+        if (!($workspace->isOwner($user) || $role === 'admin')) {
+            $query->whereHas('project', function($projectQuery) use ($user) {
+                $projectQuery->where(function($pq) use ($user) {
+                    $pq->whereHas('members', function($memberQuery) use ($user) {
+                        $memberQuery->where('user_id', $user->id);
+                    })->orWhereHas('clients', function($clientQuery) use ($user) {
+                        $clientQuery->where('user_id', $user->id);
+                    })->orWhere('created_by', $user->id);
+                });
+            });
+        }
+        
+        if (!$isDemoMode) {
+            $query->whereDate('date', $date);
+        }
 
         // Apply search filter
         if ($request->search) {
@@ -625,17 +738,33 @@ class TimesheetController extends Controller
             return redirect()->route('dashboard')->withErrors(['message' => 'No workspace selected']);
         }
         
+        $isDemoMode = config('app.is_demo', false);
+        $role = $workspace->getMemberRole($user);
+        
         $weekData = [];
         for ($date = $weekStart->copy(); $date <= $weekEnd; $date->addDay()) {
-            $entries = TimesheetEntry::with(['project', 'task'])
-                ->whereHas('timesheet', function($q) use ($workspace, $user) {
+            $entriesQuery = TimesheetEntry::with(['project', 'task'])
+                ->whereHas('timesheet', function($q) use ($workspace) {
                     $q->where('workspace_id', $workspace->id);
-                    if (!$this->canAccessAllData($user, $workspace)) {
-                        $q->where('user_id', $user->id);
-                    }
-                })
-                ->whereDate('date', $date)
-                ->get();
+                });
+            
+            if (!($workspace->isOwner($user) || $role === 'admin')) {
+                $entriesQuery->whereHas('project', function($projectQuery) use ($user) {
+                    $projectQuery->where(function($pq) use ($user) {
+                        $pq->whereHas('members', function($memberQuery) use ($user) {
+                            $memberQuery->where('user_id', $user->id);
+                        })->orWhereHas('clients', function($clientQuery) use ($user) {
+                            $clientQuery->where('user_id', $user->id);
+                        })->orWhere('created_by', $user->id);
+                    });
+                });
+            }
+            
+            // if (!$isDemoMode) {
+                $entriesQuery->whereDate('date', $date);
+            // }
+            
+            $entries = $entriesQuery->get();
                 
             $weekData[] = [
                 'date' => $date->toDateString(),
@@ -679,16 +808,30 @@ class TimesheetController extends Controller
         }
         
         $role = $workspace->getMemberRole($user);
+        $isDemoMode = config('app.is_demo', false);
         
-        $entries = TimesheetEntry::with(['project', 'task'])
-            ->whereHas('timesheet', function($q) use ($workspace, $user, $role) {
+        $entriesQuery = TimesheetEntry::with(['project', 'task'])
+            ->whereHas('timesheet', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-                if (!($workspace->isOwner($user) || $role === 'admin')) {
-                    $q->where('user_id', $user->id);
-                }
-            })
-            ->whereBetween('date', [$monthStart, $monthEnd])
-            ->get();
+            });
+        
+        if (!($workspace->isOwner($user) || $role === 'admin')) {
+            $entriesQuery->whereHas('project', function($projectQuery) use ($user) {
+                $projectQuery->where(function($pq) use ($user) {
+                    $pq->whereHas('members', function($memberQuery) use ($user) {
+                        $memberQuery->where('user_id', $user->id);
+                    })->orWhereHas('clients', function($clientQuery) use ($user) {
+                        $clientQuery->where('user_id', $user->id);
+                    })->orWhere('created_by', $user->id);
+                });
+            });
+        }
+        
+        if (!$isDemoMode) {
+            $entriesQuery->whereBetween('date', [$monthStart, $monthEnd]);
+        }
+        
+        $entries = $entriesQuery->get();
 
         $monthData = [
             'total_hours' => $entries->sum('hours'),
@@ -760,19 +903,36 @@ class TimesheetController extends Controller
         
         // Determine if user can access all data: workspace owner OR company workspace role
         $canAccessAllData = $workspace->isOwner($user) || $role === 'company';
+        $isDemoMode = config('app.is_demo', false);
         
         $calendarData = [];
         for ($date = $monthStart->copy(); $date <= $monthEnd; $date->addDay()) {
-            $entries = TimesheetEntry::with(['project', 'task', 'user'])
+            $query = TimesheetEntry::with(['project', 'task', 'user'])
                 ->whereHas('timesheet', function($q) use ($workspace, $user, $canAccessAllData) {
                     $q->where('workspace_id', $workspace->id);
-                    // If user cannot access all data, restrict to their own entries
+                    // If user cannot access all data, restrict to their own entries or tasks assigned to them
                     if (!$canAccessAllData) {
-                        $q->where('user_id', $user->id);
+                        $q->where(function($tq) use ($user) {
+                            $tq->where('user_id', $user->id)
+                               ->orWhereHas('entries', function($entryQuery) use ($user) {
+                                   $entryQuery->whereHas('task', function($taskQuery) use ($user) {
+                                       $taskQuery->where(function($tQuery) use ($user) {
+                                           $tQuery->where('assigned_to', $user->id)
+                                                  ->orWhereHas('members', function($memberQuery) use ($user) {
+                                                      $memberQuery->where('user_id', $user->id);
+                                                  });
+                                       });
+                                   });
+                               });
+                        });
                     }
-                })
-                ->whereDate('date', $date)
-                ->get();
+                });
+
+            // if (!$isDemoMode) {
+                $query->whereDate('date', $date);
+            // }
+
+            $entries = $query->get();
                 
             $calendarData[] = [
                 'date' => $date->toDateString(),
@@ -785,12 +945,28 @@ class TimesheetController extends Controller
 
         $projects = $this->getAccessibleProjects($user, $workspace);
         $timesheetId = $user->timesheets()->where('workspace_id', $workspace->id)->first()->id ?? 1;
+        
+        // Get system settings for Google Calendar integration
+        $googleCalendarSyncStatus = getSetting('is_googlecalendar_sync', '0', $user->id, $workspace->id);
+        
+        // Also check directly from database for debugging
+        $directDbCheck = \App\Models\Setting::where('user_id', $user->id)
+            ->where('workspace_id', $workspace->id)
+            ->where('key', 'is_googlecalendar_sync')
+            ->value('value');
+            
+        $systemSettings = [
+            'is_googlecalendar_sync' => $googleCalendarSyncStatus
+        ];
+        
+
 
         return Inertia::render('timesheets/CalendarView', [
             'calendarData' => $calendarData,
             'currentMonth' => $month->format('Y-m'),
             'projects' => $projects,
             'timesheetId' => $timesheetId,
+            'systemSettings' => $systemSettings,
             'permissions' => [
                 'canAccessAllData' => $canAccessAllData,
                 'canManageTimesheets' => $workspace->isOwner($user) || $role === 'company',
@@ -822,6 +998,15 @@ class TimesheetController extends Controller
         $perPage = in_array($perPage, [20, 50, 100]) ? $perPage : 20;
         
         $approvals = $query->latest()->paginate($perPage);
+
+        $approvals->getCollection()->transform(function ($approval) {
+            if ($approval->timesheet?->user) {
+                $approval->timesheet->user->avatar = check_file($approval->timesheet->user->avatar)
+                    ? get_file($approval->timesheet->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $approval;
+        });
 
         return Inertia::render('timesheets/Approvals', [
             'approvals' => $approvals,

@@ -20,15 +20,15 @@ class CashfreeController extends Controller
      * 
      * @return array
      */
-    private function getCashfreeCredentials()
+    private function getCashfreeCredentials($userId = null)
     {
         $settings = getPaymentGatewaySettings();
-        
+
         $mode = $settings['payment_settings']['cashfree_mode'] ?? 'sandbox';
-        $baseUrl = $mode === 'production' 
-            ? 'https://api.cashfree.com/pg' 
+        $baseUrl = $mode === 'production'
+            ? 'https://api.cashfree.com/pg'
             : 'https://sandbox.cashfree.com/pg';
-        
+
         return [
             'app_id' => $settings['payment_settings']['cashfree_public_key'] ?? null,
             'secret_key' => $settings['payment_settings']['cashfree_secret_key'] ?? null,
@@ -51,15 +51,15 @@ class CashfreeController extends Controller
         try {
             $plan = Plan::findOrFail($validated['plan_id']);
             $pricing = calculatePlanPricing($plan, $validated['coupon_code'] ?? null, $validated['billing_cycle'] ?? 'monthly');
-            
+
             // Get Cashfree credentials
             $credentials = $this->getCashfreeCredentials();
-            
+
             if (!$credentials['app_id'] || !$credentials['secret_key']) {
                 throw new \Exception(__('Cashfree API credentials not found'));
             }
             $orderId = 'plan_' . $plan->id . '_' . time() . '_' . uniqid();
-            
+
             // Configure Cashfree SDK
             $cashfree = new Cashfree(
                 $credentials['mode'] === 'production' ? 1 : 0,
@@ -70,19 +70,19 @@ class CashfreeController extends Controller
                 '',
                 false
             );
-            
+
             // Create customer details
             $customerDetails = new CustomerDetails();
             $customerDetails->setCustomerId('user_' . auth()->id());
             $customerDetails->setCustomerName(auth()->user()->name ?? 'Customer');
             $customerDetails->setCustomerEmail(auth()->user()->email ?? 'customer@example.com');
             $customerDetails->setCustomerPhone(auth()->user()->phone ?? '9999999999');
-            
+
             // Create order meta
             $orderMeta = new OrderMeta();
             $orderMeta->setReturnUrl(route('dashboard'));
             $orderMeta->setNotifyUrl(route('cashfree.webhook'));
-            
+
             // Create order request
             $orderRequest = new CreateOrderRequest();
             $orderRequest->setOrderId($orderId);
@@ -92,13 +92,13 @@ class CashfreeController extends Controller
             $orderRequest->setOrderMeta($orderMeta);
             $orderRequest->setOrderNote('Plan Subscription - ' . $plan->name);
             $orderRequest->setOrderTags([
-                'plan_id' => (string)$plan->id,
+                'plan_id' => (string) $plan->id,
                 'billing_cycle' => $request->billing_cycle,
-                'user_id' => (string)auth()->id()
+                'user_id' => (string) auth()->id()
             ]);
-            
+
             $apiResponse = $cashfree->PGCreateOrder($orderRequest);
-            
+
             return response()->json([
                 'payment_session_id' => $apiResponse[0]->getPaymentSessionId(),
                 'order_id' => $orderId,
@@ -106,12 +106,12 @@ class CashfreeController extends Controller
                 'currency' => $credentials['currency'],
                 'mode' => $credentials['mode']
             ]);
-            
+
         } catch (\Exception $e) {
             return response()->json(['error' => __('Failed to create payment session: ') . $e->getMessage()], 500);
         }
     }
-    
+
     /**
      * Verify Cashfree payment
      *
@@ -127,11 +127,11 @@ class CashfreeController extends Controller
 
         try {
             $credentials = $this->getCashfreeCredentials();
-            
+
             if (!$credentials['app_id'] || !$credentials['secret_key']) {
                 throw new \Exception('Cashfree API credentials not found');
             }
-            
+
             // Configure Cashfree SDK
             $cashfree = new Cashfree(
                 $credentials['mode'] === 'production' ? 1 : 0,
@@ -143,11 +143,11 @@ class CashfreeController extends Controller
                 false
             );
             $orderResponse = $cashfree->PGFetchOrder($validated['order_id']);
-            
+
             if ($orderResponse[0]->getOrderStatus() !== 'PAID') {
                 throw new \Exception(__('Payment not completed successfully'));
             }
-            
+
             // Get payment details - response is array with payment objects
             $paymentsResponse = $cashfree->PGOrderFetchPayments($validated['order_id']);
             // Response structure: [payments_array, status_code, headers]
@@ -156,7 +156,7 @@ class CashfreeController extends Controller
             } else {
                 throw new \Exception(__('Invalid payment response structure'));
             }
-            
+
             $successfulPayment = null;
             foreach ($payments as $payment) {
                 // Payment is already an object from the SDK
@@ -165,11 +165,11 @@ class CashfreeController extends Controller
                     break;
                 }
             }
-            
+
             if (!$successfulPayment) {
                 throw new \Exception(__('No successful payment found for this order'));
             }
-            
+
             $paymentData = [
                 'user_id' => auth()->id(),
                 'plan_id' => $validated['plan_id'],
@@ -178,16 +178,16 @@ class CashfreeController extends Controller
                 'coupon_code' => $validated['coupon_code'] ?? null,
                 'payment_id' => $successfulPayment->getCfPaymentId(),
             ];
-            
+
             $planOrder = processPaymentSuccess($paymentData);
-            
+
             return response()->json(['success' => true]);
-            
+
         } catch (\Exception $e) {
             return response()->json(['error' => __('Payment verification failed: ') . $e->getMessage()], 500);
         }
     }
-    
+
     /**
      * Handle Cashfree webhook
      *
@@ -198,26 +198,26 @@ class CashfreeController extends Controller
     {
         try {
             $credentials = $this->getCashfreeCredentials();
-            
+
             // Verify webhook signature
             $signature = $request->header('x-webhook-signature');
             $timestamp = $request->header('x-webhook-timestamp');
             $rawBody = $request->getContent();
-            
+
             $expectedSignature = base64_encode(hash_hmac('sha256', $timestamp . $rawBody, $credentials['secret_key'], true));
-            
+
             if (!hash_equals($expectedSignature, $signature)) {
                 return response()->json(['error' => 'Invalid signature'], 400);
             }
-            
+
             $data = $request->json()->all();
-            
+
             if ($data['type'] === 'PAYMENT_SUCCESS_WEBHOOK') {
                 $paymentData = $data['data'];
-                
+
                 // Extract plan and user info from order tags
                 $orderTags = $paymentData['order']['order_tags'] ?? [];
-                
+
                 if (isset($orderTags['plan_id']) && isset($orderTags['user_id'])) {
                     processPaymentSuccess([
                         'user_id' => $orderTags['user_id'],
@@ -228,11 +228,362 @@ class CashfreeController extends Controller
                     ]);
                 }
             }
-            
+
             return response()->json(['status' => 'success']);
-            
+
         } catch (\Exception $e) {
             return response()->json(['error' => __('Webhook processing failed')], 500);
+        }
+    }
+
+    /**
+     * Create invoice payment session
+     */
+    public function createInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            // Get user-specific payment settings
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key']) || $settings['is_cashfree_enabled'] !== '1') {
+                return response()->json(['error' => 'Cashfree not configured'], 400);
+            }
+
+            $mode = ($settings['cashfree_mode'] ?? 'sandbox') === 'sandbox' ? 'sandbox' : 'production';
+            $credentials = [
+                'app_id' => $settings['cashfree_public_key'],
+                'secret_key' => $settings['cashfree_secret_key'],
+                'mode' => $mode
+            ];
+
+            $orderId = 'invoice_' . $invoice->id . '_' . time();
+
+            // Configure Cashfree SDK
+            $cashfree = new Cashfree(
+                $credentials['mode'] === 'production' ? 1 : 0,
+                $credentials['app_id'],
+                $credentials['secret_key'],
+                '',
+                '',
+                '',
+                false
+            );
+
+            // Create customer details
+            $customerDetails = new CustomerDetails();
+            $customerDetails->setCustomerId('client_' . $invoice->client->id);
+            $customerDetails->setCustomerName($invoice->client->name ?? 'Customer');
+            $customerDetails->setCustomerEmail($invoice->client->email ?? 'customer@example.com');
+            $customerDetails->setCustomerPhone($invoice->client->phone ?? '9999999999');
+
+            // Create order meta
+            $orderMeta = new OrderMeta();
+            $orderMeta->setReturnUrl(route('invoices.show', $invoice->id));
+            $orderMeta->setNotifyUrl(route('invoices.show', $invoice->id));
+
+            // Create order request
+            $orderRequest = new CreateOrderRequest();
+            $orderRequest->setOrderId($orderId);
+            $orderRequest->setOrderAmount($request->amount);
+            $orderRequest->setOrderCurrency('INR');
+            $orderRequest->setCustomerDetails($customerDetails);
+            $orderRequest->setOrderMeta($orderMeta);
+            $orderRequest->setOrderNote('Invoice Payment - ' . $invoice->invoice_number);
+
+            $apiResponse = $cashfree->PGCreateOrder($orderRequest);
+
+            return response()->json([
+                'success' => true,
+                'payment_session_id' => $apiResponse[0]->getPaymentSessionId(),
+                'order_id' => $orderId,
+                'amount' => $request->amount,
+                'currency' => 'INR',
+                'mode' => $credentials['mode']
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Verify invoice payment
+     */
+    public function verifyInvoicePayment(Request $request)
+    {
+        $request->validate([
+            'order_id' => 'required|string',
+            'invoice_token' => 'required|string'
+        ]);
+
+        try {
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            // Get user-specific payment settings
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key']) || $settings['is_cashfree_enabled'] !== '1') {
+                throw new \Exception('Cashfree API credentials not found');
+            }
+
+            $mode = ($settings['cashfree_mode'] ?? 'sandbox') === 'sandbox' ? 'sandbox' : 'production';
+            $credentials = [
+                'app_id' => $settings['cashfree_public_key'],
+                'secret_key' => $settings['cashfree_secret_key'],
+                'mode' => $mode
+            ];
+
+            // Configure Cashfree SDK
+            $cashfree = new Cashfree(
+                $credentials['mode'] === 'production' ? 1 : 0,
+                $credentials['app_id'],
+                $credentials['secret_key'],
+                '',
+                '',
+                '',
+                false
+            );
+
+            $orderResponse = $cashfree->PGFetchOrder($request->order_id);
+            $orderStatus = $orderResponse[0]->getOrderStatus();
+
+            if ($orderStatus !== 'PAID') {
+                throw new \Exception('Payment not completed successfully. Status: ' . $orderStatus);
+            }
+
+            $paymentsResponse = $cashfree->PGOrderFetchPayments($request->order_id);
+            $payments = $paymentsResponse[0] ?? [];
+            $successfulPayment = null;
+
+            foreach ($payments as $payment) {
+                if ($payment->getPaymentStatus() === 'SUCCESS') {
+                    $successfulPayment = $payment;
+                    break;
+                }
+            }
+
+            if ($successfulPayment) {
+                $invoice->createPaymentRecord(
+                    $successfulPayment->getPaymentAmount(),
+                    'cashfree',
+                    $successfulPayment->getCfPaymentId()
+                );
+            } else {
+                $invoice->createPaymentRecord(
+                    $orderResponse[0]->getOrderAmount(),
+                    'cashfree',
+                    $request->order_id
+                );
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function createInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+
+            // Get user-specific payment settings
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            // Fallback to global settings if not configured for user
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key']) || $settings['is_cashfree_enabled'] !== '1') {
+                $globalSettings = getPaymentGatewaySettings();
+                $settings = $globalSettings['payment_settings'] ?? [];
+            }
+
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key'])) {
+                return response()->json(['error' => 'Cashfree payment not configured'], 400);
+            }
+
+            $credentials = [
+                'app_id' => $settings['cashfree_public_key'],
+                'secret_key' => $settings['cashfree_secret_key'],
+                'mode' => ($settings['cashfree_mode'] ?? 'sandbox') === 'sandbox' ? 'sandbox' : 'production'
+            ];
+
+            $orderId = 'invoice_' . $invoice->id . '_' . time();
+            $phone = preg_replace('/[^0-9]/', '', $invoice->client->phone ?? '9999999999');
+            if (strlen($phone) < 10) {
+                $phone = '9999999999';
+            }
+
+            // Configure Cashfree SDK
+            $cashfree = new Cashfree(
+                $credentials['mode'] === 'production' ? 1 : 0,
+                $credentials['app_id'],
+                $credentials['secret_key'],
+                '',
+                '',
+                '',
+                false
+            );
+
+            // Create customer details
+            $customerDetails = new CustomerDetails();
+            $customerDetails->setCustomerId('client_' . $invoice->client->id);
+            $customerDetails->setCustomerName($invoice->client->name ?? 'Customer');
+            $customerDetails->setCustomerEmail($invoice->client->email ?? 'customer@example.com');
+            $customerDetails->setCustomerPhone($phone);
+
+            // Create order meta
+            $orderMeta = new OrderMeta();
+            $orderMeta->setReturnUrl(route('cashfree.invoice.success.from-link', $token));
+            $orderMeta->setNotifyUrl(route('cashfree.invoice.callback.from-link'));
+
+            // Create order request
+            $orderRequest = new CreateOrderRequest();
+            $orderRequest->setOrderId($orderId);
+            $orderRequest->setOrderAmount((float) $request->amount);
+            $orderRequest->setOrderCurrency('INR');
+            $orderRequest->setCustomerDetails($customerDetails);
+            $orderRequest->setOrderMeta($orderMeta);
+            $orderRequest->setOrderNote('Invoice Payment - ' . $invoice->invoice_number);
+            $orderRequest->setOrderTags([
+                'invoice_id' => (string) $invoice->id,
+                'invoice_token' => $token
+            ]);
+
+            $apiResponse = $cashfree->PGCreateOrder($orderRequest);
+
+            return response()->json([
+                'success' => true,
+                'payment_session_id' => $apiResponse[0]->getPaymentSessionId(),
+                'order_id' => $orderId,
+                'amount' => $request->amount,
+                'currency' => 'INR',
+                'mode' => $credentials['mode']
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function verifyInvoicePaymentFromLink(Request $request, $token)
+    {
+        $request->validate([
+            'order_id' => 'required|string'
+        ]);
+
+        try {
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+
+            // Get user-specific payment settings
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            // Fallback to global settings if not configured for user
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key']) || $settings['is_cashfree_enabled'] !== '1') {
+                $globalSettings = getPaymentGatewaySettings();
+                $settings = $globalSettings['payment_settings'] ?? [];
+            }
+
+            if (!isset($settings['cashfree_public_key']) || !isset($settings['cashfree_secret_key'])) {
+                throw new \Exception('Cashfree API credentials not found');
+            }
+
+            $credentials = [
+                'app_id' => $settings['cashfree_public_key'],
+                'secret_key' => $settings['cashfree_secret_key'],
+                'mode' => ($settings['cashfree_mode'] ?? 'sandbox') === 'sandbox' ? 'sandbox' : 'production'
+            ];
+
+            // Configure Cashfree SDK
+            $cashfree = new Cashfree(
+                $credentials['mode'] === 'production' ? 1 : 0,
+                $credentials['app_id'],
+                $credentials['secret_key'],
+                '',
+                '',
+                '',
+                false
+            );
+
+            $orderResponse = $cashfree->PGFetchOrder($request->order_id);
+
+            if ($orderResponse[0]->getOrderStatus() !== 'PAID') {
+                throw new \Exception('Payment not completed successfully');
+            }
+
+            $paymentsResponse = $cashfree->PGOrderFetchPayments($request->order_id);
+            $payments = $paymentsResponse[0] ?? [];
+            $successfulPayment = null;
+
+            foreach ($payments as $payment) {
+                if ($payment->getPaymentStatus() === 'SUCCESS') {
+                    $successfulPayment = $payment;
+                    break;
+                }
+            }
+
+            if ($successfulPayment) {
+                $invoice->createPaymentRecord($successfulPayment->getPaymentAmount(), 'cashfree', $successfulPayment->getCfPaymentId());
+            } else {
+                $invoice->createPaymentRecord($orderResponse[0]->getOrderAmount(), 'cashfree', $request->order_id);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+            return redirect()->route('invoices.payment', $token)
+                ->with('success', 'Payment processed successfully.');
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)->with('error', 'Payment processing failed');
+        }
+    }
+
+    public function invoiceCallbackFromLink(Request $request)
+    {
+        try {
+            $data = $request->json()->all();
+
+            if ($data['type'] === 'PAYMENT_SUCCESS_WEBHOOK') {
+                $paymentData = $data['data'];
+                $orderTags = $paymentData['order']['order_tags'] ?? [];
+
+                if (isset($orderTags['invoice_id']) && isset($orderTags['invoice_token'])) {
+                    $invoice = \App\Models\Invoice::find($orderTags['invoice_id']);
+                    if ($invoice) {
+                        $invoice->createPaymentRecord(
+                            $paymentData['order']['order_amount'],
+                            'cashfree',
+                            $paymentData['cf_payment_id']
+                        );
+                    }
+                }
+            }
+
+            return response()->json(['status' => 'success']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Callback processing failed'], 500);
         }
     }
 }

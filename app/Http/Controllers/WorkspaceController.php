@@ -24,7 +24,7 @@ class WorkspaceController extends Controller
         
         $ownedWorkspaces = $user->ownedWorkspaces()->withCount('members')->get();
         $memberWorkspaces = $user->workspaces()->wherePivot('status', 'active')->withCount('members')->get();
-        
+        // $memberWorkspaces = $user->workspaces()->wherePivot('status', 'active')->wherePivot('role', '!=', 'owner')->withCount('members')->get();
         return Inertia::render('Workspaces/Index', [
             'ownedWorkspaces' => $ownedWorkspaces,
             'memberWorkspaces' => $memberWorkspaces,
@@ -88,7 +88,16 @@ class WorkspaceController extends Controller
         
         // Add pending_invitations as an alias for the frontend
         $workspace->pending_invitations = $workspace->pendingInvitations;
-        
+
+        // Append avatar URL to each member's user
+        $workspace->members->each(function ($member) {
+            if ($member->user) {
+                $member->user->avatar = check_file($member->user->avatar)
+                    ? get_file($member->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+
         return Inertia::render('Workspaces/Show', [
             'workspace' => $workspace,
             'availableRoles' => (array) ($workspace->getAvailableInvitationRoles() ?? []),
@@ -127,7 +136,20 @@ class WorkspaceController extends Controller
             abort(403);
         }
 
+        $user = auth()->user();
+        $wasCurrentWorkspace = $user->current_workspace_id === $workspace->id;
+
         $workspace->delete();
+
+        // If deleted workspace was current, switch to another workspace
+        if ($wasCurrentWorkspace) {
+            $nextWorkspace = $user->ownedWorkspaces()->latest()->first() 
+                ?? $user->workspaces()->wherePivot('status', 'active')->latest()->first();
+            
+            if ($nextWorkspace) {
+                $user->update(['current_workspace_id' => $nextWorkspace->id]);
+            }
+        }
 
         return redirect()->route('workspaces.index')->with('success', __('Workspace deleted successfully'));
     }
@@ -142,13 +164,20 @@ class WorkspaceController extends Controller
             abort(403, __('You do not have access to this workspace.'));
         }
         
+        if (isSaasMode()) {
+            $owner = $workspace->owner;
+            if ($owner && $owner->needsPlanSubscription()) {
+                return back()->with('error', __('This workspace has an expired or no active plan.'));
+            }
+        }
+
         $switched = $user->switchWorkspace($workspace);
         
         if (!$switched) {
             return back()->with('error', __('Failed to switch workspace.'));
         }
         
-        return \Inertia\Inertia::location(route('dashboard'));
+        return back()->with('success', __('Workspace switched successfully.'));
     }
 
     public function removeMember(Workspace $workspace, \App\Models\User $user)

@@ -47,6 +47,15 @@ class StripePaymentController extends Controller
                 'confirm' => true,
                 'return_url' => route('plans.index'),
                 'description' => 'Plan subscription: ' . $plan->name . ' (' . ($validated['billing_cycle'] ?? 'monthly') . ')',
+                'shipping' => [
+                    'name' => $request->cardholder_name,
+                    'address' => [
+                        'line1' => 'N/A',
+                        'city' => 'N/A',
+                        'country' => 'US',
+                        'postal_code' => '00000'
+                    ]
+                ],
                 'metadata' => [
                     'plan_name' => $plan->name,
                     'billing_cycle' => $validated['billing_cycle'] ?? 'monthly',
@@ -131,6 +140,78 @@ class StripePaymentController extends Controller
                 );
 
                 return redirect()->route('invoices.show', $invoice->id)
+                    ->with('success', 'Payment processed successfully.');
+            }
+
+            return back()->withErrors(['error' => 'Payment failed']);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Stripe\Exception\CardException $e) {
+            return back()->withErrors(['error' => 'Card payment failed: ' . $e->getError()->message]);
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Payment processing failed: ' . $e->getMessage()]);
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01',
+                'payment_method_id' => 'required|string',
+                'cardholder_name' => 'required|string',
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_stripe_enabled']) || $settings['is_stripe_enabled'] !== '1') {
+                return back()->withErrors(['error' => 'Stripe not enabled']);
+            }
+            
+            if (!isset($settings['stripe_secret']) || empty($settings['stripe_secret'])) {
+                return back()->withErrors(['error' => 'Stripe not configured']);
+            }
+
+            Stripe::setApiKey($settings['stripe_secret']);
+
+            $paymentIntent = PaymentIntent::create([
+                'amount' => $request->amount * 100,
+                'currency' => 'usd',
+                'payment_method' => $request->payment_method_id,
+                'confirmation_method' => 'manual',
+                'confirm' => true,
+                'return_url' => route('invoices.payment', $invoice->payment_token),
+                'description' => 'Invoice payment: ' . $invoice->invoice_number,
+                'shipping' => [
+                    'name' => $request->cardholder_name,
+                    'address' => [
+                        'line1' => 'N/A',
+                        'city' => 'N/A',
+                        'country' => 'US',
+                        'postal_code' => '00000'
+                    ]
+                ],
+                'metadata' => [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'type' => 'invoice_payment'
+                ],
+            ]);
+
+            if ($paymentIntent->status === 'succeeded') {
+                Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'amount' => $request->amount,
+                    'payment_method' => 'stripe',
+                    'payment_date' => now(),
+                    'created_by' => $invoice->created_by
+                ]);
+
+                return redirect()->route('invoices.payment', $invoice->payment_token)
                     ->with('success', 'Payment processed successfully.');
             }
 

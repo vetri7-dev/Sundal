@@ -13,10 +13,13 @@ class TimesheetApprovalController extends Controller
     {
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
+        
+        // Check if user is owner or manager
+        $isOwner = $workspace->isOwner($user);
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Only owners and managers can access timesheet approvals
-        if (!$workspace->isOwner($user) && $userWorkspaceRole !== 'manager') {
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied. Only owners and managers can access timesheet approvals.');
         }
         
@@ -57,7 +60,7 @@ class TimesheetApprovalController extends Controller
         }
 
         // Managers only see approvals from their assigned projects
-        if ($userWorkspaceRole === 'manager') {
+        if (!$isOwner && $userWorkspaceRole === 'manager') {
             $query->whereHas('timesheet.entries', function($q) use ($user) {
                 $q->whereHas('project', function($projectQuery) use ($user) {
                     $projectQuery->where(function($pq) use ($user) {
@@ -70,13 +73,77 @@ class TimesheetApprovalController extends Controller
             });
         }
 
+        // Handle sorting
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'status', 'approved_at'];
+        if (!in_array($sortField, $allowedSortFields)) {
+            $sortField = 'created_at';
+        }
+        
+        if (!in_array($sortDirection, ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+        
+        // Apply sorting - handle nested fields
+        if ($sortField === 'user_name') {
+            $query->join('timesheets', 'timesheet_approvals.timesheet_id', '=', 'timesheets.id')
+                  ->join('users', 'timesheets.user_id', '=', 'users.id')
+                  ->orderBy('users.name', $sortDirection)
+                  ->select('timesheet_approvals.*');
+        } elseif ($sortField === 'start_date') {
+            $query->join('timesheets as ts', 'timesheet_approvals.timesheet_id', '=', 'ts.id')
+                  ->orderBy('ts.start_date', $sortDirection)
+                  ->select('timesheet_approvals.*');
+        } elseif ($sortField === 'total_hours') {
+            $query->join('timesheets as ts2', 'timesheet_approvals.timesheet_id', '=', 'ts2.id')
+                  ->orderBy('ts2.total_hours', $sortDirection)
+                  ->select('timesheet_approvals.*');
+        } elseif ($sortField === 'billable_hours') {
+            $query->join('timesheets as ts3', 'timesheet_approvals.timesheet_id', '=', 'ts3.id')
+                  ->orderBy('ts3.billable_hours', $sortDirection)
+                  ->select('timesheet_approvals.*');
+        } else {
+            $query->orderBy($sortField, $sortDirection);
+        }
+
         $perPage = in_array($request->per_page, [12, 24, 36, 48]) ? $request->per_page : 12;
-        $approvals = $query->latest()->paginate($perPage);
+        $approvals = $query->paginate($perPage);
+        $approvals->getCollection()->transform(function ($approval) {
+            if ($approval->timesheet?->user) {
+                $approval->timesheet->user->avatar = check_file($approval->timesheet->user->avatar)
+                    ? get_file($approval->timesheet->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $approval;
+        });
 
         return Inertia::render('timesheets/Approvals', [
             'approvals' => $approvals,
-            'filters' => $request->only(['status', 'search', 'per_page', 'view', 'from_date', 'to_date']),
-            'userWorkspaceRole' => $workspace->isOwner($user) ? 'owner' : $userWorkspaceRole
+            'filters' => $request->only(['status', 'search', 'per_page', 'view', 'from_date', 'to_date', 'sort_field', 'sort_direction']),
+            'userWorkspaceRole' => $isOwner ? 'owner' : $userWorkspaceRole
+        ]);
+    }
+
+    public function show(TimesheetApproval $approval)
+    {
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        
+        $isOwner = $workspace->isOwner($user);
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+        
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
+            abort(403, 'Access denied.');
+        }
+        
+        $approval->load(['timesheet.user', 'timesheet.entries.project', 'timesheet.entries.task', 'approver']);
+        
+        return Inertia::render('timesheets/ApprovalDetails', [
+            'approval' => $approval,
+            'userWorkspaceRole' => $isOwner ? 'owner' : $userWorkspaceRole
         ]);
     }
 
@@ -84,10 +151,13 @@ class TimesheetApprovalController extends Controller
     {
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
+        
+        // Check if user is owner or manager
+        $isOwner = $workspace->isOwner($user);
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Only owners and managers can approve timesheets
-        if (!$workspace->isOwner($user) && $userWorkspaceRole !== 'manager') {
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied. Only owners and managers can approve timesheets.');
         }
         
@@ -120,10 +190,13 @@ class TimesheetApprovalController extends Controller
     {
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
+        
+        // Check if user is owner or manager
+        $isOwner = $workspace->isOwner($user);
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Only owners and managers can reject timesheets
-        if (!$workspace->isOwner($user) && $userWorkspaceRole !== 'manager') {
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied. Only owners and managers can reject timesheets.');
         }
         
@@ -155,10 +228,13 @@ class TimesheetApprovalController extends Controller
     {
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
+        
+        // Check if user is owner or manager
+        $isOwner = $workspace->isOwner($user);
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Only owners and managers can approve timesheets
-        if (!$workspace->isOwner($user) && $userWorkspaceRole !== 'manager') {
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied. Only owners and managers can approve timesheets.');
         }
         
@@ -197,10 +273,13 @@ class TimesheetApprovalController extends Controller
     {
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
+        
+        // Check if user is owner or manager
+        $isOwner = $workspace->isOwner($user);
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Only owners and managers can reject timesheets
-        if (!$workspace->isOwner($user) && $userWorkspaceRole !== 'manager') {
+        if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied. Only owners and managers can reject timesheets.');
         }
         

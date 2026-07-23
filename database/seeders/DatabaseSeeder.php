@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
                 $seeders[] = CouponSeeder::class;
                 $seeders[] = PlanOrderSeeder::class;
                 $seeders[] = PlanRequestSeeder::class;
+                $seeders[] = ReferralSeeder::class;
             }
 
             $seeders = array_merge($seeders, [
@@ -54,7 +55,13 @@ class DatabaseSeeder extends Seeder
                 InvoiceSeeder::class,
                 LoginHistorySeeder::class,
                 WebhookSeeder::class,
-                ZoomMeetingSeeder::class
+                ZoomMeetingSeeder::class,
+                EmailTemplateSeeder::class,
+                NotificationTemplateSeeder::class,
+                ContractSeeder::class,
+                GoogleMeetingSeeder::class,
+                ToDoSeeder::class,
+                NoteSeeder::class,
             ]);
         }
 

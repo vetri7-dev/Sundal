@@ -24,6 +24,10 @@ import SlackSettings from './components/slack-settings';
 import TelegramSettings from './components/telegram-settings';
 import EmailNotificationSettings from './components/email-notification-settings';
 import ZoomSettings from './components/zoom-settings';
+import TaxSettings from './components/tax-settings';
+import InvoiceSettings from './components/invoice-settings';
+import GoogleCalendarSettings from './components/google-calendar-settings';
+import GoogleMeetSettings from './components/google-meet-settings';
 
 import { Toaster } from '@/components/ui/toaster';
 import { useTranslation } from 'react-i18next';
@@ -150,6 +154,30 @@ export default function Settings() {
       icon: <Video className="h-4 w-4 mr-2" />,
       permission: 'zoom_meeting_view_any'
     },
+    {
+      title: t('Tax Settings'),
+      href: '#tax-settings',
+      icon: <DollarSign className="h-4 w-4 mr-2" />,
+      permission: 'tax_view_any'
+    },
+    {
+      title: t('Invoice Settings'),
+      href: '#invoice-settings',
+      icon: <FileText className="h-4 w-4 mr-2" />,
+      permission: 'settings_invoice'
+    },
+    {
+      title: t('Google Calendar Settings'),
+      href: '#google-calendar-settings',
+      icon: <Calendar className="h-4 w-4 mr-2" />,
+      permission: 'settings_google_calendar'
+    },
+    {
+      title: t('Google Meet Settings'),
+      href: '#google-meet-settings',
+      icon: <Video className="h-4 w-4 mr-2" />,
+      permission: 'settings_manage'
+    },
 
   ];
 
@@ -177,8 +205,10 @@ export default function Settings() {
   const cacheSettingsRef = useRef<HTMLDivElement>(null);
   const webhookSettingsRef = useRef<HTMLDivElement>(null);
   const zoomSettingsRef = useRef<HTMLDivElement>(null);
-
-
+  const taxSettingsRef = useRef<HTMLDivElement>(null);
+  const invoiceSettingsRef = useRef<HTMLDivElement>(null);
+  const googleCalendarSettingsRef = useRef<HTMLDivElement>(null);
+  const googleMeetSettingsRef = useRef<HTMLDivElement>(null);
 
   // Smart scroll functionality
   useEffect(() => {
@@ -203,10 +233,21 @@ export default function Settings() {
       const cacheSettingsPosition = cacheSettingsRef.current?.offsetTop || 0;
       const webhookSettingsPosition = webhookSettingsRef.current?.offsetTop || 0;
       const zoomSettingsPosition = zoomSettingsRef.current?.offsetTop || 0;
-
+      const taxSettingsPosition = taxSettingsRef.current?.offsetTop || 0;
+      const invoiceSettingsPosition = invoiceSettingsRef.current?.offsetTop || 0;
+      const googleCalendarSettingsPosition = googleCalendarSettingsRef.current?.offsetTop || 0;
+      const googleMeetSettingsPosition = googleMeetSettingsRef.current?.offsetTop || 0;
 
       // Determine active section based on scroll position
-      if (scrollPosition >= zoomSettingsPosition) {
+      if (scrollPosition >= googleMeetSettingsPosition && googleMeetSettingsRef.current) {
+        setActiveSection('google-meet-settings');
+      } else if (scrollPosition >= googleCalendarSettingsPosition && googleCalendarSettingsRef.current) {
+        setActiveSection('google-calendar-settings');
+      } else if (scrollPosition >= invoiceSettingsPosition && invoiceSettingsRef.current) {
+        setActiveSection('invoice-settings');
+      } else if (scrollPosition >= taxSettingsPosition && taxSettingsRef.current) {
+        setActiveSection('tax-settings');
+      } else if (scrollPosition >= zoomSettingsPosition) {
         setActiveSection('zoom-settings');
       } else if (scrollPosition >= webhookSettingsPosition) {
         setActiveSection('webhook-settings');
@@ -423,9 +464,29 @@ export default function Settings() {
             </section>
           )}
 
+          {hasPermission('tax_view_any') && (
+            <section id="tax-settings" ref={taxSettingsRef} className="mb-8">
+              <TaxSettings settings={systemSettings} />
+            </section>
+          )}
 
+          {hasPermission('settings_invoice') && (
+            <section id="invoice-settings" ref={invoiceSettingsRef} className="mb-8">
+              <InvoiceSettings settings={systemSettings} />
+            </section>
+          )}
 
+          {hasPermission('settings_google_calendar') && (
+            <section id="google-calendar-settings" ref={googleCalendarSettingsRef} className="mb-8">
+              <GoogleCalendarSettings settings={systemSettings} />
+            </section>
+          )}
 
+          {hasPermission('settings_manage') && (
+            <section id="google-meet-settings" ref={googleMeetSettingsRef} className="mb-8">
+              <GoogleMeetSettings settings={systemSettings} />
+            </section>
+          )}
 
         </div>
       </div>

@@ -34,6 +34,7 @@ interface CrudFormModalProps {
   title: string;
   mode: 'create' | 'edit' | 'view';
   description?: string;
+  submitButtonText?: string;
 }
 
 export function CrudFormModal({
@@ -44,7 +45,8 @@ export function CrudFormModal({
   initialData = {},
   title,
   mode,
-  description
+  description,
+  submitButtonText
 }: CrudFormModalProps) {
   const { t } = useTranslation();
   const [formData, setFormData] = useState<Record<string, any>>({});
@@ -235,6 +237,20 @@ export function CrudFormModal({
         );
       }
       
+      // Special handling for checkbox fields - show actual checkbox in disabled state
+      if (field.type === 'checkbox') {
+        return (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={field.name}
+              checked={!!formData[field.name]}
+              disabled={true}
+            />
+            <Label htmlFor={field.name}>{field.placeholder || field.label}</Label>
+          </div>
+        );
+      }
+      
       // For other field types
       return (
         <div className="p-2 border rounded-md bg-gray-50">
@@ -341,7 +357,7 @@ export function CrudFormModal({
                 {displayText || (field.placeholder || `Select ${field.label}`)}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent className="z-[60000]">
+            <SelectContent className="z-[60000]" searchable>
               {field.relation ? (
                 options.map((option: any) => (
                   <SelectItem 
@@ -395,12 +411,23 @@ export function CrudFormModal({
       case 'switch':
         // Don't render any label here, it will be handled by the parent component
         return (
-          <Switch
-            id={field.name}
-            checked={!!formData[field.name]}
-            onCheckedChange={(checked) => handleChange(field.name, checked)}
-            disabled={mode === 'view'}
-          />
+          // <Switch
+          //   id={field.name}
+          //   checked={!!formData[field.name]}
+          //   onCheckedChange={(checked) => handleChange(field.name, checked)}
+          //   disabled={mode === 'view'}
+          // />
+          <div className="flex items-center space-x-2">
+            <Label htmlFor={field.name} className="text-sm font-medium">
+              {field.label}
+            </Label>
+            <Switch
+              id={field.name}
+              checked={!!formData[field.name]}
+              onCheckedChange={(checked) => handleChange(field.name, checked)}
+              disabled={mode === 'view'}
+            />
+          </div>
         );
         
       case 'multi-select':
@@ -522,17 +549,17 @@ export function CrudFormModal({
   const layout = formConfig.layout || 'default';
   const columns = formConfig.columns || 1;
 
-  const modalId = `crud-modal-${mode}-${Date.now()}`;
+  const modalId = `crud-modal-${mode}-${title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`${getModalSizeClass()} max-h-[90vh]`} modalId={modalId}>
+      <DialogContent className={`${getModalSizeClass()} max-h-[90vh] overflow-visible`} modalId={modalId}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description || " "}</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[70vh] pr-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <ScrollArea className="max-h-[70vh] pr-4 overflow-visible">
+          <form id={modalId} onSubmit={handleSubmit} className="space-y-4">
             {/* Price Summary Section */}
             {formConfig.priceSummary && (
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -575,11 +602,11 @@ export function CrudFormModal({
                         width: '100%'
                       }}
                     >
-                      {field.type !== 'custom' && (
+                      {field.type !== 'checkbox' && field.type !== 'switch' ? (
                         <Label htmlFor={field.name} className="text-sm font-medium">
                           {field.label} {field.required && !(field.type === 'file' && mode === 'edit') && <span className="text-red-500">*</span>}
                         </Label>
-                      )}
+                      ) : null}
                       {renderField(field)}
                       {errors[field.name] && (
                         <p className="text-xs text-red-500">{errors[field.name]}</p>
@@ -603,7 +630,7 @@ export function CrudFormModal({
                         flexGrow: field.width ? 0 : 1
                       }}
                     >
-                      {field.type !== 'custom' && (
+                      {field.type !== 'custom' && field.type !== 'checkbox' && field.type !== 'switch' && (
                         <Label htmlFor={field.name} className="text-sm font-medium">
                           {field.label} {field.required && !(field.type === 'file' && mode === 'edit') && <span className="text-red-500">*</span>}
                         </Label>
@@ -630,7 +657,7 @@ export function CrudFormModal({
                         className="space-y-2"
                         style={{ width: field.width || "100%" }}
                       >
-                        {field.type !== 'custom' && (
+                        {field.type !== 'custom' && field.type !== 'checkbox' && field.type !== 'switch' && (
                           <Label htmlFor={field.name} className="text-sm font-medium">
                             {field.label} {field.required && !(field.type === 'file' && mode === 'edit') && <span className="text-red-500">*</span>}
                           </Label>
@@ -652,7 +679,9 @@ export function CrudFormModal({
             {t("Cancel")}
           </Button>
           {mode !== 'view' && (
-            <Button type="button" onClick={handleSubmit}>{t("Save")}</Button>
+            <Button type="submit" form={modalId}>
+              {submitButtonText || (mode === 'create' ? t("Create") : t("Update"))}
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

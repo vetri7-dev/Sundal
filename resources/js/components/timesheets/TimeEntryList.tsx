@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,8 @@ import TimeEntryForm from './TimeEntryForm';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { formatHoursDisplay } from '@/utils/timesheetUtils';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTranslation } from 'react-i18next';
 
 interface TimeEntry {
     id: number;
@@ -40,6 +42,8 @@ interface Props {
 }
 
 export default function TimeEntryList({ entries, timesheetId, projects, onRefresh, filters = {} }: Props) {
+    const { t } = useTranslation();
+    const { auth } = usePage().props as any;
     const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
     const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -131,7 +135,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
 
     const handleDeleteConfirm = () => {
         if (entryToDelete) {
-            router.delete(route('timesheet-entries.destroy', { timesheet_entry: entryToDelete.id }), {
+            router.delete(route('timesheet-entries.destroy', entryToDelete.id), {
                 onSuccess: () => {
                     onRefresh?.();
                     setIsDeleteModalOpen(false);
@@ -208,7 +212,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
     return (
         <div className="space-y-4">
             {/* Search and filters section */}
-            <div className="bg-white rounded-lg shadow">
+            <div className="bg-white rounded-lg border shadow">
                 <div className="p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -224,7 +228,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                 </div>
                                 <Button type="submit" size="sm">
                                     <Search className="h-4 w-4 mr-1.5" />
-                                    Search
+                                    {t('Search')}
                                 </Button>
                             </form>
                             
@@ -247,7 +251,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                         </div>
                         
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">Per Page:</Label>
+                            <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
                             <Select 
                                 value={filters.per_page?.toString() || "10"} 
                                 onValueChange={(value) => {
@@ -274,13 +278,13 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                         <div className="w-full mt-3 p-4 bg-gray-50 border rounded-md">
                             <div className="flex flex-wrap gap-4 items-end">
                                 <div className="space-y-2">
-                                    <Label>Project</Label>
+                                    <Label>{t('Project')}</Label>
                                     <Select value={selectedProject} onValueChange={handleProjectFilter}>
                                         <SelectTrigger className="w-40">
                                             <SelectValue placeholder="All Projects" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Projects</SelectItem>
+                                            <SelectItem value="all">{t('All Projects')}</SelectItem>
                                             {projects.map((project) => (
                                                 <SelectItem key={project.id} value={project.id.toString()}>
                                                     {project.title}
@@ -291,15 +295,15 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                 </div>
                                 
                                 <div className="space-y-2">
-                                    <Label>Billable</Label>
+                                    <Label>{t('Billable')}</Label>
                                     <Select value={selectedBillable} onValueChange={handleBillableFilter}>
                                         <SelectTrigger className="w-40">
                                             <SelectValue placeholder="All Types" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Types</SelectItem>
-                                            <SelectItem value="true">Billable</SelectItem>
-                                            <SelectItem value="false">Non-billable</SelectItem>
+                                            <SelectItem value="all">{t('All Types')}</SelectItem>
+                                            <SelectItem value="true">{t('Billable')}</SelectItem>
+                                            <SelectItem value="false">{t('Non-billable')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -311,7 +315,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                     onClick={handleResetFilters}
                                     disabled={!hasActiveFilters()}
                                 >
-                                    Reset Filters
+                                    {t('Reset Filters')}
                                 </Button>
                             </div>
                         </div>
@@ -324,15 +328,15 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 mb-6">
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                                 <div className="w-2 h-6 bg-blue-500 rounded-full"></div>
-                                Time Summary
+                                {t('Time Summary')}
                             </h3>
                             {hoursDisplay.match && totalHours > 0 && (
-                                <Badge className="bg-green-100 text-green-800 border-green-300 px-3 py-1" variant="outline">
+                                <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
                                     <CheckCircle className="h-4 w-4 mr-1" />
-                                    All Hours Billable
-                                </Badge>
+                                    {t('All Hours Billable')}
+                                </span>
                             )}
                         </div>
                         
@@ -343,8 +347,8 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                         <Clock className="h-5 w-5 text-blue-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Total Hours</p>
-                                        <p className="text-2xl font-bold text-gray-900">{hoursDisplay.total}</p>
+                                        <p className="text-sm text-gray-600">{t('Total Hours')}</p>
+                                        <p className="text-lg font-bold text-gray-900">{hoursDisplay.total}</p>
                                     </div>
                                     {hoursDisplay.match && (
                                         <CheckCircle className="h-5 w-5 text-green-500 ml-auto" title="Hours match" />
@@ -358,8 +362,8 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                         <Calendar className="h-5 w-5 text-green-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Billable Hours</p>
-                                        <p className="text-2xl font-bold text-green-600">{hoursDisplay.billable}</p>
+                                        <p className="text-sm text-gray-600">{t('Billable Hours')}</p>
+                                        <p className="text-lg font-bold text-green-600">{hoursDisplay.billable}</p>
                                     </div>
                                 </div>
                             </div>
@@ -367,14 +371,14 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                         
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-sm font-semibold text-gray-700">Billable Rate</span>
+                                <span className="text-sm font-semibold text-gray-700">{t('Billable Rate')}</span>
                                 <span className="text-lg font-bold text-gray-900">{hoursDisplay.percentage}%</span>
                             </div>
                             <div className="relative">
                                 <Progress value={hoursDisplay.percentage} className="w-full h-4 bg-gray-200" />
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <span className="text-xs font-medium text-white drop-shadow">
-                                        {billableHours}h / {totalHours}h
+                                        {billableHours.toFixed(2)}h / {totalHours.toFixed(2)}h
                                     </span>
                                 </div>
                             </div>
@@ -387,15 +391,21 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
             {selectedEntries.length > 0 && (
                 <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
                     <span className="text-sm font-medium">{selectedEntries.length} selected</span>
+                    {auth?.permissions?.includes('timesheet_update') && (
                     <Button size="sm" onClick={() => handleBulkToggleBillable(true)}>
-                        Mark Billable
+                        {t('Mark Billable')}
                     </Button>
+                    )}
+                    {auth?.permissions?.includes('timesheet_update') && (
                     <Button size="sm" variant="outline" onClick={() => handleBulkToggleBillable(false)}>
-                        Mark Non-Billable
+                        {t('Mark Non-Billable')}
                     </Button>
+                    )}
+                    {auth?.permissions?.includes('timesheet_delete') && (
                     <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
-                        Delete Selected
+                        {t('Delete Selected')}
                     </Button>
+                    )}
                 </div>
             )}
 
@@ -404,110 +414,134 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
-                            <tr>
+                            <tr className="bg-[#F0F0F1] dark:bg-gray-800 border-b" >
+                                {(auth?.permissions?.includes('timesheet_update') || auth?.permissions?.includes('timesheet_delete')) && (
                                 <th className="px-4 py-3 text-left">
                                     <Checkbox
                                         checked={selectedEntries.length === entriesData.length && entriesData.length > 0}
                                         onCheckedChange={toggleSelectAll}
                                     />
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Task</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Billable</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                )}
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Date')}</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Project')}</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Task')}</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Hours')}</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Billable')}</th>
+                                {(auth?.permissions?.includes('timesheet_update') || auth?.permissions?.includes('timesheet_delete')) && (
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">{t('Actions')}</th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {entriesData.map((entry) => (
                                 <tr key={entry.id} className="hover:bg-gray-50">
+                                    {(auth?.permissions?.includes('timesheet_update') || auth?.permissions?.includes('timesheet_delete')) && (
                                     <td className="px-4 py-3">
                                         <Checkbox
                                             checked={selectedEntries.includes(entry.id)}
                                             onCheckedChange={() => toggleSelection(entry.id)}
                                         />
                                     </td>
+                                    )}
                                     <td className="px-4 py-3 text-sm text-gray-900">
-                                        {new Date(entry.date).toLocaleDateString()}
+                                        {window.appSettings.formatDateTime(new Date(entry.date),false)}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="text-sm font-medium text-gray-900">{entry.project.title}</div>
+                                        <div className="text-sm font-medium text-gray-900">{entry.project?.title}</div>
                                         {entry.description && <div className="text-sm text-gray-500 truncate max-w-xs">{entry.description}</div>}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900">
                                         {entry.task?.title || '-'}
                                     </td>
                                     <td className="px-4 py-3 text-sm font-medium text-blue-600">
-                                        {entry.hours}h
+                                        {(() => {
+                                            const h = Number(entry.hours);
+                                            if (h < 1/60) return `${Math.round(h * 3600)}s`;
+                                            if (h < 1) return `${Math.round(h * 60)}m`;
+                                            return `${h}h`;
+                                        })()}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <Badge variant={entry.is_billable ? 'default' : 'secondary'} className={entry.is_billable ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                                            {entry.is_billable ? '💰 Billable' : 'Non-billable'}
-                                        </Badge>
+                                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
+                                            entry.is_billable
+                                                ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
+                                                : 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20'
+                                        }`}>
+                                            {entry.is_billable ? 'Billable' : 'Non-Billable'}
+                                        </span>
                                     </td>
+                                    {(auth?.permissions?.includes('timesheet_update') || auth?.permissions?.includes('timesheet_delete')) && (
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1">
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleEdit(entry)}
-                                                className="h-8 w-8 text-amber-500 hover:text-amber-700"
-                                                title="Edit"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleDelete(entry)}
-                                                className="h-8 w-8 text-red-500 hover:text-red-700"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        onClick={() => handleEdit(entry)}
+                                                        className="h-8 w-8 text-amber-500 hover:text-amber-700"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('Edit')}</TooltipContent>
+                                            </Tooltip>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        onClick={() => handleDelete(entry)}
+                                                        className="h-8 w-8 text-red-500 hover:text-red-700"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('Delete')}</TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+                {/* Pagination */}
+                {paginationData?.links && (
+                    <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
+                        <div className="text-sm text-muted-foreground">
+                            Showing <span className="font-medium">{paginationData?.from || 0}</span> to <span className="font-medium">{paginationData?.to || 0}</span> of <span className="font-medium">{paginationData?.total || 0}</span> entries
+                        </div>
+                        
+                        <div className="flex gap-1">
+                            {paginationData?.links?.map((link: any, i: number) => {
+                                const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
+                                const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
+                                
+                                return (
+                                    <Button
+                                        key={i}
+                                        variant={link.active ? 'default' : 'outline'}
+                                        size={isTextLink ? "sm" : "icon"}
+                                        className={isTextLink ? "px-3" : "h-8 w-8"}
+                                        disabled={!link.url}
+                                        onClick={() => link.url && router.get(link.url)}
+                                    >
+                                        {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {entriesData.length === 0 && (
                 <div className="bg-white rounded-lg shadow p-8 text-center">
                     <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No time entries found</p>
-                </div>
-            )}
-
-            {/* Pagination */}
-            {paginationData?.links && (
-                <div className="bg-white p-4 rounded-lg shadow flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                        Showing <span className="font-medium">{paginationData?.from || 0}</span> to <span className="font-medium">{paginationData?.to || 0}</span> of <span className="font-medium">{paginationData?.total || 0}</span> entries
-                    </div>
-                    
-                    <div className="flex gap-1">
-                        {paginationData?.links?.map((link: any, i: number) => {
-                            const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
-                            const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
-                            
-                            return (
-                                <Button
-                                    key={i}
-                                    variant={link.active ? 'default' : 'outline'}
-                                    size={isTextLink ? "sm" : "icon"}
-                                    className={isTextLink ? "px-3" : "h-8 w-8"}
-                                    disabled={!link.url}
-                                    onClick={() => link.url && router.get(link.url)}
-                                >
-                                    {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
-                                </Button>
-                            );
-                        })}
-                    </div>
+                    <p className="text-gray-500">{t('No time entries found')}</p>
                 </div>
             )}
 

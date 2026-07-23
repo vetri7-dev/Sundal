@@ -174,11 +174,11 @@ class ExpenseApprovalController extends Controller
             ->whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
             })
-            ->whereIn('status', ['pending', 'requires_info']);
+            ->whereIn('project_expenses.status', ['pending', 'requires_info']);
             
         // Apply filters
         if ($request->status && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $query->where('project_expenses.status', $request->status);
         }
         
         if ($request->project_id && $request->project_id !== 'all') {
@@ -199,8 +199,30 @@ class ExpenseApprovalController extends Controller
             });
         }
         
-        $perPage = $request->get('per_page', 20);
-        $pendingExpenses = $query->latest('created_at')->paginate($perPage);
+        // Add sorting
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+        
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'amount', 'expense_date', 'title', 'status', 'project.title', 'submitter.name'];
+        if ($sortBy === 'project.title') {
+            $query->join('projects as sort_projects', 'project_expenses.project_id', '=', 'sort_projects.id')
+                  ->orderBy('sort_projects.title', $sortOrder)
+                  ->select('project_expenses.*');
+        } elseif ($sortBy === 'submitter.name') {
+            $query->join('users as sort_users', 'project_expenses.submitted_by', '=', 'sort_users.id')
+                  ->orderBy('sort_users.name', $sortOrder)
+                  ->select('project_expenses.*');
+        } elseif ($sortBy === 'status') {
+            $query->orderBy('project_expenses.status', $sortOrder);
+        } elseif (in_array($sortBy, $allowedSortFields)) {
+            $query->orderBy('project_expenses.' . $sortBy, $sortOrder);
+        } else {
+            $query->latest('project_expenses.created_at');
+        }
+        
+        $perPage = $request->get('per_page', 12);
+        $pendingExpenses = $query->paginate($perPage);
         
         // Get filter options
         $projects = \App\Models\Project::forWorkspace($workspace->id)
@@ -211,26 +233,26 @@ class ExpenseApprovalController extends Controller
         $stats = [
             'pending_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'pending')->count(),
+            })->where('project_expenses.status', 'pending')->count(),
             
             'requires_info_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'requires_info')->count(),
+            })->where('project_expenses.status', 'requires_info')->count(),
             
             'approved_today' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'approved')->whereDate('updated_at', today())->count(),
+            })->where('project_expenses.status', 'approved')->whereDate('project_expenses.updated_at', today())->count(),
             
             'pending_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'pending')->sum('amount')
+            })->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
 
         return Inertia::render('expenses/Approvals', [
             'expenses' => $pendingExpenses,
             'stats' => $stats,
             'projects' => $projects,
-            'filters' => $request->only(['status', 'project_id', 'search', 'per_page']),
+            'filters' => $request->only(['status', 'project_id', 'search', 'per_page', 'sort_by', 'sort_order', 'view']),
             'permissions' => [
                 'approve' => $this->checkPermission('expense_approve'),
                 'reject' => $this->checkPermission('expense_reject'),
@@ -248,9 +270,9 @@ class ExpenseApprovalController extends Controller
             ->whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
             })
-            ->where('status', 'pending')
-            ->latest()
-            ->paginate(20);
+            ->where('project_expenses.status', 'pending')
+            ->latest('project_expenses.created_at')
+            ->paginate(12);
 
         return response()->json([
             'expenses' => $pendingExpenses
@@ -282,20 +304,20 @@ class ExpenseApprovalController extends Controller
         $stats = [
             'pending_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'pending')->count(),
+            })->where('project_expenses.status', 'pending')->count(),
             
             'approved_today' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'approved')
-              ->whereDate('updated_at', today())->count(),
+            })->where('project_expenses.status', 'approved')
+              ->whereDate('project_expenses.updated_at', today())->count(),
               
             'total_approved_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->approved()->sum('amount'),
+            })->where('project_expenses.status', 'approved')->sum('project_expenses.amount'),
             
             'pending_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id);
-            })->where('status', 'pending')->sum('amount')
+            })->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
         
         return response()->json($stats);

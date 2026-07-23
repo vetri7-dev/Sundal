@@ -19,8 +19,8 @@ interface DayEntry {
 
 interface TimeEntry {
     id: number;
-    project: { title: string };
-    task?: { title: string };
+    project: { title: string } | null;
+    task?: { title: string } | null;
     hours: number;
     description?: string;
     is_billable: boolean;
@@ -88,7 +88,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
     const formatWeekRange = () => {
         const start = new Date(weekStart);
         const end = new Date(weekEnd);
-        return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+        return `${window.appSettings.formatDateTime(start, false)} - ${window.appSettings.formatDateTime(end, false)}`;
     };
 
     const getDayName = (dateStr: string) => {
@@ -119,7 +119,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
 
     return (
         <PageTemplate 
-            title={t('Weekly Time Tracking')} 
+            title={t('Weekly View')} 
             actions={pageActions}
             breadcrumbs={breadcrumbs}
         >
@@ -139,9 +139,9 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                             </Button>
                             
                             <div className="text-center">
-                                <CardTitle className="text-xl">
+                                <CardTitle className="text-lg">
                                     {formatWeekRange()}
-                                    {isCurrentWeek() && <Badge className="ml-2">{t('Current Week')}</Badge>}
+                                    {isCurrentWeek() && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">{t('Current Week')}</span>}
                                 </CardTitle>
                             </div>
                             
@@ -171,7 +171,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                             <Clock className="h-5 w-5 text-blue-600" />
                             <span className="text-sm font-medium text-blue-600">{t('Total Hours')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-blue-900">
+                        <div className="text-xl font-bold text-blue-900">
                             {getWeekTotal().toFixed(2)}h
                         </div>
                     </CardContent>
@@ -183,7 +183,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                             <Calendar className="h-5 w-5 text-green-600" />
                             <span className="text-sm font-medium text-green-600">{t('Billable Hours')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-green-900">
+                        <div className="text-xl font-bold text-green-900">
                             {getWeekBillable().toFixed(2)}h
                         </div>
                     </CardContent>
@@ -194,7 +194,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-purple-600">{t('Entries')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-purple-900">
+                        <div className="text-xl font-bold text-purple-900">
                             {getWeekEntries()}
                         </div>
                     </CardContent>
@@ -205,7 +205,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-orange-600">{t('Avg/Day')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-orange-900">
+                        <div className="text-xl font-bold text-orange-900">
                             {(getWeekTotal() / 7).toFixed(1)}h
                         </div>
                     </CardContent>
@@ -241,9 +241,9 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                             <div className="space-y-1">
                                 {day.entries.slice(0, 3).map((entry, index) => (
                                     <div key={index} className="text-xs p-2 bg-gray-50 rounded">
-                                        <div className="font-medium truncate">{entry.project.title}</div>
+                                        <div className="font-medium truncate">{entry.project?.title ?? 'Unknown Project'}</div>
                                         <div className="text-muted-foreground">
-                                            {entry.hours}h {entry.is_billable && '💰'}
+                                            {entry.hours}h {entry.is_billable && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">{t('Billable')}</span>}
                                         </div>
                                     </div>
                                 ))}

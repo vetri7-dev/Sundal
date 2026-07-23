@@ -422,4 +422,48 @@ class InvoiceController extends Controller
             'timesheet_entries' => $timesheetEntries
         ]);
     }
+
+    public function preview(Invoice $invoice)
+    {
+        $invoice->load(['project', 'client', 'creator', 'items.task', 'items.expense', 'items.timesheetEntry', 'payments']);
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+        if ($userWorkspaceRole === 'client' && $invoice->client_id !== $user->id) {
+            abort(403, 'Access denied.');
+        }
+        $invoiceData = $invoice->toArray();
+        $taxRate = $invoice->tax_rate;
+        if (is_string($taxRate)) {
+            $taxRate = json_decode($taxRate, true) ?: [];
+        }
+        $invoiceData['tax_rate'] = $taxRate;
+        $invoiceSettings = \App\Models\Setting::where('user_id', $invoice->created_by)
+            ->whereIn('key', ['invoice_template', 'invoice_qr_display', 'invoice_color', 'invoice_footer_title', 'invoice_footer_notes', 'invoice_logo'])
+            ->pluck('value', 'key')
+            ->toArray();
+        return \Inertia\Inertia::render('invoices/Preview', [
+            'invoice' => $invoiceData,
+            'invoiceSettings' => $invoiceSettings,
+        ]);
+    }
+
+    public function approvePayment(\Illuminate\Http\Request $request, Invoice $invoice, \App\Models\Payment $payment)
+    {
+        if ($payment->invoice_id !== $invoice->id || $payment->status !== 'pending') {
+            abort(422, 'Invalid payment.');
+        }
+        $payment->update(['status' => 'completed']);
+        $invoice->updatePaymentStatus();
+        return back()->with('success', __('Payment approved successfully!'));
+    }
+
+    public function rejectPayment(\Illuminate\Http\Request $request, Invoice $invoice, \App\Models\Payment $payment)
+    {
+        if ($payment->invoice_id !== $invoice->id || $payment->status !== 'pending') {
+            abort(422, 'Invalid payment.');
+        }
+        $payment->delete();
+        return back()->with('success', __('Payment rejected and removed.'));
+    }
 }

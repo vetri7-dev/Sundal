@@ -37,11 +37,12 @@ class RoleSeeder extends Seeder
                 'media',
                 'email_template',
                 'settings_cookie',
+                'referral'
             ])->get();
 
             // Get settings permissions excluding slack and telegram
             $settingsPermissions = Permission::where('module', 'settings')
-                ->whereNotIn('name', ['settings_slack', 'settings_telegram', 'settings_email_notification','settings_webhook'])
+                ->whereNotIn('name', ['settings_slack', 'settings_telegram', 'settings_email_notification', 'settings_webhook', 'settings_tax', 'settings_invoice', 'settings_google_calendar', 'settings_google_meet'])
                 ->get();
 
             $superAdminNamePermissions = Permission::whereIn('name', [
@@ -70,7 +71,21 @@ class RoleSeeder extends Seeder
                 'report',
                 'notification_template',
                 'webhook',
-                'zoom_meeting'
+                'zoom_meeting',
+                'google_meeting',
+                'tax',
+                'notes',
+                'contract_types',
+                'contracts',
+                'contract_notes',
+                'contract_comments',
+                'contract_attachments',
+                'contracts_signature',
+                'task_calendar',
+                'project_report',
+                'project_permissions',
+                'todos',
+
             ])->get();
 
             $companyLimitedPermissions = Permission::whereIn('name', [
@@ -90,11 +105,24 @@ class RoleSeeder extends Seeder
                 'settings_slack',
                 'settings_telegram',
                 'settings_zoom',
+                'settings_tax',
+                'settings_invoice',
+                'settings_google_calendar',
+                'settings_google_meet',
                 'user_view_logs',
                 'settings_webhook',
                 'language_view',
                 'language_update',
-                'language_manage'
+                'language_manage',
+                'referral_view_any',
+                'referral_view',
+                'referral_create',
+                'referral_manage',
+                'referral_payout',
+                'calendar_view',
+                'calendar_view_local',
+                'calendar_view_google',
+                'calendar_sync_google',
             ])->get();
 
             $companyPermissions = $companyModulePermissions->merge($companyLimitedPermissions);
@@ -124,7 +152,22 @@ class RoleSeeder extends Seeder
                 'notification_template',
                 'user_view_logs',
                 'webhook',
-                'zoom_meeting'
+                'zoom_meeting',
+                'tax',
+                'notes',
+                'contract_types',
+                'contracts',
+                'contract_notes',
+                'contract_comments',
+                'contract_attachments',
+                'contracts_signature',
+                'calendar',
+                'task_calendar',
+                'project_report',
+                'settings_google_meet',
+                'google_meeting',
+                'project_permissions',
+                'todos',
             ])->get();
         }
 
@@ -151,14 +194,39 @@ class RoleSeeder extends Seeder
             ['label' => 'Manager', 'description' => 'Manager with full workspace management']
         );
 
-        $managerPermissions = Permission::whereIn('module', ['dashboards', 'projects', 'tasks', 'bugs', 'timesheet', 'budget', 'expense', 'expense_approval', 'invoice', 'media', 'report'])
+        $managerPermissions = Permission::whereIn('module', ['dashboards', 'tasks', 'bugs', 'timesheet', 'budget', 'expense', 'expense_approval', 'invoice', 'media', 'report', 'notes', 'calendar', 'task_calendar', 'project_report'])
             ->orWhereIn('name', [
-                'workspace_switch', 
-                'workspace_leave', 
+                'workspace_switch',
+                'workspace_leave',
                 'user_view_logs',
                 'zoom_meeting_view_any',
                 'zoom_meeting_view',
-                'zoom_meeting_join'
+                'zoom_meeting_join',
+                'google_meeting_view_any',
+                'google_meeting_view',
+                'google_meeting_join',
+                'project_view_any',
+                'project_view',
+                'project_create',
+                'project_update',
+                'project_delete',
+                'project_assign_members',
+                'project_assign_clients',
+                'project_assign',
+                'project_manage_budget',
+                'project_manage_milestones',
+                'project_manage_attachments',
+                'project_generate_reports',
+                'project_track_progress',
+                'project_manage_notes',
+                'project_view_activity',
+                'project_view_gantt',
+                'project_permission_update',
+                'todo_view_any',
+                'todo_view',
+                'todo_status_update',
+                'todo_update',
+                'todo_attachment_download',
             ])
             ->get();
         $managerRole->syncPermissions($managerPermissions);
@@ -182,11 +250,20 @@ class RoleSeeder extends Seeder
             'task_update',
             'task_view',
             'task_add_comments',
+            'task_change_status',
+            'task_manage_stages',
+            'task_delete',
+            'task_add_attachments',
+            'task_manage_checklists',
             'bug_view_any',
             'bug_create',
             'bug_update',
+            'bug_delete',
             'bug_view',
             'bug_add_comments',
+            'bug_change_status',
+            'bug_manage_statuses',
+            'bug_add_attachments',
             'timesheet_view_any',
             'timesheet_view',
             'timesheet_create',
@@ -199,10 +276,38 @@ class RoleSeeder extends Seeder
             'expense_view_any',
             'expense_create',
             'expense_view',
+            'expense_update',
+            'expense_delete',
             'zoom_meeting_view_any',
             'zoom_meeting_view',
             'zoom_meeting_join',
+            'google_meeting_view_any',
+            'google_meeting_view',
+            'google_meeting_join',
             'user_view_logs',
+            'note_view_any',
+            'note_view',
+            'note_create',
+            'note_update',
+            'note_delete',
+            'calendar_view',
+            'calendar_view_local',
+            'calendar_view_google',
+            'calendar_sync_google',
+            'task_calendar_view',
+            'task_calendar_view_tasks',
+            'task_calendar_view_meetings',
+            'project_report_view_any',
+            'project_report_view',
+            'todo_view_any',
+            'todo_view',
+            'todo_status_update',
+            'todo_update',
+            'todo_attachment_download',
+            'media_view_any',
+            'media_upload',
+            'media_download',
+            'media_delete',
         ])->get();
         $memberRole->syncPermissions($memberPermissions);
 
@@ -222,8 +327,8 @@ class RoleSeeder extends Seeder
             'project_view',
             'task_view_any',
             'task_view',
-            'bug_view_any',
-            'bug_view',
+            'task_change_status',
+            'task_manage_stages',
             'timesheet_view_any',
             'timesheet_view',
             'invoice_view_any',
@@ -236,7 +341,40 @@ class RoleSeeder extends Seeder
             'zoom_meeting_view_any',
             'zoom_meeting_view',
             'zoom_meeting_join',
+            'google_meeting_view_any',
+            'google_meeting_view',
+            'google_meeting_join',
             'user_view_logs',
+            'note_view_any',
+            'note_view',
+            'note_create',
+            'note_update',
+            'note_delete',
+            'contract_view_any',
+            'contract_view',
+            'contract_preview',
+            'contract_change_status',
+            'contract_signature',
+            'contract_comment_create',
+            'contract_type_view_any',
+            'contract_type_view',
+            'calendar_view',
+            'calendar_view_local',
+            'calendar_view_google',
+            'task_calendar_view',
+            'task_calendar_view_tasks',
+            'task_calendar_view_meetings',
+            'project_report_view_any',
+            'project_report_view',
+            'todo_view_any',
+            'todo_view',
+            'todo_status_update',
+            'todo_update',
+            'todo_attachment_download',
+            'media_view_any',
+            'media_upload',
+            'media_download',
+            'media_delete',
         ])->get();
 
         $clientRole->syncPermissions($clientPermissions);

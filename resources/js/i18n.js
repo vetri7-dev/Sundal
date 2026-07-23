@@ -15,12 +15,18 @@ const customBackend = {
     this.options = backendOptions;
   },
   read: function(language, namespace, callback) {
-    const loadPath = window.route 
-        ? window.route('translations', language) 
-        : `${window.Ziggy?.url || ''}/translations/${language}`;
-    
+    // Sanitize language — must be a valid locale code, never HTML or garbage
+    const safeLanguage = /^[a-z]{2,8}(-[A-Za-z]{2,8})?$/.test(language) ? language : 'en';
+    const baseUrl = (window.baseUrl || '').replace(/\/$/, '');
+    const loadPath = window.route
+        ? window.route('translations', safeLanguage)
+        : `${baseUrl}/translations/${safeLanguage}`;
+
     fetch(loadPath)
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) throw new Error(`Translation fetch failed: HTTP ${response.status} for ${loadPath}`);
+        return response.json();
+      })
       .then(data => {
         // Extract translations from the structured response
         const translations = data.translations;
@@ -113,8 +119,6 @@ i18n
         
         partialBundledLanguages: true,
         loadOnInitialization: true,
-        
-        // Prevent blank screen: don't suspend components while translations load
         react: {
             useSuspense: false,
         },

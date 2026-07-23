@@ -7,7 +7,9 @@ use App\Models\Project;
 use App\Models\User;
 use App\Models\Setting;
 use App\Services\ZoomService;
+use App\Services\GoogleCalendarService;
 use App\Traits\HasPermissionChecks;
+use App\Events\ZoomMeetingCreated;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -18,10 +20,12 @@ class ZoomMeetingController extends Controller
     use HasPermissionChecks;
 
     protected $zoomService;
+    protected $googleCalendarService;
 
-    public function __construct(ZoomService $zoomService)
+    public function __construct(ZoomService $zoomService, GoogleCalendarService $googleCalendarService)
     {
         $this->zoomService = $zoomService;
+        $this->googleCalendarService = $googleCalendarService;
     }
 
     public function index(Request $request)
@@ -42,9 +46,11 @@ class ZoomMeetingController extends Controller
         
         // Access control based on workspace role - same as ProjectController
         if ($userWorkspaceRole !== 'owner') {
-            // Non-owners: Only assigned meetings
-            $query->whereHas('members', function($memberQuery) use ($user) {
-                $memberQuery->where('user_id', $user->id);
+            // Non-owners: Only assigned meetings or meetings they created
+            $query->where(function($q) use ($user) {
+                $q->whereHas('members', function($memberQuery) use ($user) {
+                    $memberQuery->where('user_id', $user->id);
+                })->orWhere('user_id', $user->id);
             });
         }
         // Filter by search
@@ -56,17 +62,34 @@ class ZoomMeetingController extends Controller
         }
 
         // Filter by status
-        if ($request->status) {
+        if ($request->status && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
         // Filter by project
-        if ($request->project_id) {
+        if ($request->project_id && $request->project_id !== 'all') {
             $query->where('project_id', $request->project_id);
         }
 
-        $perPage = in_array($request->get('per_page', 12), [12, 24, 48]) ? $request->get('per_page', 12) : 12;
-        $meetings = $query->orderBy('start_time', 'desc')->paginate($perPage);
+        // Handle sorting
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'title', 'start_time', 'duration', 'status'];
+        if (!in_array($sortField, $allowedSortFields)) {
+            $sortField = 'created_at';
+        }
+        
+        if (!in_array($sortDirection, ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+        
+        // Apply sorting
+        $query->orderBy($sortField, $sortDirection);
+
+        $perPage = in_array($request->get('per_page', 10), [10, 25, 50, 100]) ? $request->get('per_page', 10) : 10;
+        $meetings = $query->paginate($perPage);
 
 
 
@@ -81,14 +104,18 @@ class ZoomMeetingController extends Controller
 
         // Check if Zoom is configured (now works for all users by checking workspace-level settings)
         $hasZoomConfig = $this->zoomService->hasValidCredentials();
+        
+        // Get Google Calendar sync settings
+        $googleCalendarEnabled = getSetting('is_googlecalendar_sync', '0', $user->id, $user->current_workspace_id) === '1';
+        
         return Inertia::render('zoom-meetings/Index', [
             'meetings' => $meetings,
-
             'projects' => $projects,
             'members' => $members,
             'hasZoomConfig' => $hasZoomConfig,
-            'filters' => $request->only(['search', 'status', 'project_id']),
-            'permissions' => $this->getModuleCrudPermissions('zoom_meeting')
+            'filters' => $request->only(['search', 'status', 'project_id', 'per_page', 'sort_field', 'sort_direction']),
+            'permissions' => $this->getModuleCrudPermissions('zoom_meeting'),
+            'googleCalendarEnabled' => $googleCalendarEnabled
         ]);
     }
 
@@ -110,9 +137,10 @@ class ZoomMeetingController extends Controller
             'duration' => 'required|integer|min:15|max:480',
             'timezone' => 'required|string',
             'password' => 'nullable|string',
-            'project_id' => 'nullable|exists:projects,id',
-            'member_ids' => 'nullable|array',
+            'project_id' => 'required|exists:projects,id',
+            'member_ids' => 'required|array',
             'member_ids.*' => 'exists:users,id',
+            'is_googlecalendar_sync' => 'nullable|boolean',
         ]);
 
         $startTime = Carbon::parse($request->start_time);
@@ -170,11 +198,22 @@ class ZoomMeetingController extends Controller
                 'join_url' => $joinUrl,
                 'status' => 'scheduled',
                 'user_id' => $user->id,
+                'is_googlecalendar_sync' => $request->is_googlecalendar_sync ?? false,
             ]);
 
             // Attach members to the meeting
             if (!empty($request->member_ids)) {
                 $meeting->members()->attach($request->member_ids);
+            }
+
+            // Sync with Google Calendar if enabled
+            if ($request->is_googlecalendar_sync) {
+                $this->syncMeetingWithGoogleCalendar($meeting);
+            }
+
+            // Fire event for email notification
+            if (!config('app.is_demo', true)) {
+                event(new ZoomMeetingCreated($meeting));
             }
 
             $message = $startUrl ? __('Zoom meeting created successfully!') : __('Meeting created successfully! Zoom API failed - please check your app activation and scopes in Zoom Marketplace.');
@@ -245,6 +284,19 @@ class ZoomMeetingController extends Controller
         }
 
         try {
+            // Delete Google Calendar event
+            if ($zoomMeeting->google_calendar_event_id) {
+                try {
+                    $this->googleCalendarService->deleteEvent($zoomMeeting->google_calendar_event_id, auth()->id(), $user->current_workspace_id);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to delete Google Calendar event', [
+                        'meeting_id' => $zoomMeeting->id,
+                        'event_id' => $zoomMeeting->google_calendar_event_id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+            
             // Only delete from Zoom if it's a real Zoom meeting (not local)
             if ($zoomMeeting->zoom_meeting_id && !str_starts_with($zoomMeeting->zoom_meeting_id, 'local_')) {
                 $zoomResponse = $this->zoomService->deleteMeeting($zoomMeeting->zoom_meeting_id);
@@ -311,6 +363,23 @@ class ZoomMeetingController extends Controller
 
         $zoomMeeting->load(['user', 'project', 'workspace', 'members']);
 
+        // Transform avatar URLs
+        $meetingData = $zoomMeeting->toArray();
+        if ($zoomMeeting->user) {
+            $meetingData['user']['avatar'] = check_file($zoomMeeting->user->avatar)
+                ? get_file($zoomMeeting->user->avatar)
+                : get_file('avatars/avatar.png');
+        }
+        if ($zoomMeeting->members) {
+            $meetingData['members'] = $zoomMeeting->members->map(function ($member) {
+                $data = $member->toArray();
+                $data['avatar'] = check_file($member->avatar)
+                    ? get_file($member->avatar)
+                    : get_file('avatars/avatar.png');
+                return $data;
+            })->values()->toArray();
+        }
+
         // Get projects for edit modal
         $projects = Project::forWorkspace($workspace->id)->get(['id', 'title']);
         
@@ -319,12 +388,16 @@ class ZoomMeetingController extends Controller
             $q->where('workspace_id', $workspace->id)
               ->where('status', 'active');
         })->get(['id', 'name', 'email']);
+        
+        // Get Google Calendar sync settings
+        $googleCalendarEnabled = getSetting('is_googlecalendar_sync', '0', $user->id, $user->current_workspace_id) === '1';
 
         return Inertia::render('zoom-meetings/Show', [
-            'meeting' => $zoomMeeting,
+            'meeting' => $meetingData,
             'projects' => $projects,
             'members' => $members,
-            'permissions' => $this->getModuleCrudPermissions('zoom_meeting')
+            'permissions' => $this->getModuleCrudPermissions('zoom_meeting'),
+            'googleCalendarEnabled' => $googleCalendarEnabled
         ]);
     }
 
@@ -346,13 +419,16 @@ class ZoomMeetingController extends Controller
             'duration' => 'required|integer|min:15|max:480',
             'timezone' => 'required|string',
             'password' => 'nullable|string',
-            'member_ids' => 'nullable|array',
+            'project_id' => 'required|exists:projects,id',
+            'status' => 'nullable|in:scheduled,started,ended,cancelled',
+            'member_ids' => 'required|array|min:1',
             'member_ids.*' => 'exists:users,id',
+            'is_googlecalendar_sync' => 'nullable|boolean',
         ]);
 
         $startTime = Carbon::parse($request->start_time);
         $endTime = $startTime->copy()->addMinutes($request->duration);
-
+        
         $meetingData = [
             'title' => $request->title,
             'description' => $request->description,
@@ -363,8 +439,8 @@ class ZoomMeetingController extends Controller
         ];
 
         try {
-            // Update meeting in Zoom
-            if ($zoomMeeting->zoom_meeting_id) {
+            // Update meeting in Zoom (only for real Zoom meetings, not local)
+            if ($zoomMeeting->zoom_meeting_id && !str_starts_with($zoomMeeting->zoom_meeting_id, 'local_')) {
                 $zoomResponse = $this->zoomService->updateMeeting($zoomMeeting->zoom_meeting_id, $meetingData);
 
                 if (!$zoomResponse['success']) {
@@ -381,11 +457,22 @@ class ZoomMeetingController extends Controller
                 'timezone' => $request->timezone,
                 'duration' => $request->duration,
                 'password' => $request->password,
+                'project_id' => $request->project_id,
+                'status' => $request->status ?? $zoomMeeting->status,
             ]);
 
             // Update members
             if ($request->has('member_ids')) {
                 $zoomMeeting->members()->sync($request->member_ids ?? []);
+            }
+
+            // Sync with Google Calendar if enabled
+            if ($validated['is_googlecalendar_sync'] ?? false) {
+                $this->syncMeetingWithGoogleCalendar($zoomMeeting);
+            } elseif ($zoomMeeting->google_calendar_event_id && !($validated['is_googlecalendar_sync'] ?? false)) {
+                // Remove from Google Calendar if sync was disabled
+                $this->googleCalendarService->deleteEvent($zoomMeeting->google_calendar_event_id, auth()->id());
+                $zoomMeeting->update(['google_calendar_event_id' => null]);
             }
 
             return redirect()->route('zoom-meetings.index')
@@ -430,5 +517,39 @@ class ZoomMeetingController extends Controller
             });
 
         return response()->json($meetings);
+    }
+
+    /**
+     * Sync meeting with Google Calendar
+     */
+    private function syncMeetingWithGoogleCalendar(ZoomMeeting $meeting)
+    {
+        try {
+            $user = auth()->user();
+            $workspaceId = $user->current_workspace_id;
+            
+            // Check if Google Calendar is enabled and configured
+            $googleCalendarEnabled = getSetting('is_googlecalendar_sync', '0', $user->id, $workspaceId);
+            
+            if ($googleCalendarEnabled !== '1') {
+                return;
+            }
+            
+            if ($meeting->google_calendar_event_id) {
+                // Update existing event
+                $this->googleCalendarService->updateMeetingEvent($meeting->google_calendar_event_id, $meeting, $user->id, $workspaceId);
+            } else {
+                // Create new event
+                $eventId = $this->googleCalendarService->createMeetingEvent($meeting, $user->id, $workspaceId);
+                if ($eventId) {
+                    $meeting->update(['google_calendar_event_id' => $eventId]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Failed to sync meeting with Google Calendar', [
+                'meeting_id' => $meeting->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

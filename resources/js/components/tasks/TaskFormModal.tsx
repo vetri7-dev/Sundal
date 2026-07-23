@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Task, Project, ProjectMilestone, User } from '@/types';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
+import { Label } from '../ui/label';
 
 interface Props {
     isOpen: boolean;
@@ -17,9 +19,10 @@ interface Props {
     projects: Project[];
     members: User[];
     milestones?: ProjectMilestone[];
+    googleCalendarEnabled?: boolean;
 }
 
-export default function TaskFormModal({ isOpen, onClose, task, projects, members, milestones = [] }: Props) {
+export default function TaskFormModal({ isOpen, onClose, task, projects, members, milestones = [], googleCalendarEnabled = false }: Props) {
     const { t } = useTranslation();
     const isEditing = !!task;
     const [formData, setFormData] = useState({
@@ -30,11 +33,14 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
         priority: task?.priority || 'medium',
         start_date: task?.start_date || '',
         end_date: task?.end_date || '',
-        assigned_to: task?.assigned_to?.id?.toString() || 'none'
+        assigned_to: task?.assigned_to?.id?.toString() || 'none',
+        is_googlecalendar_sync: task?.is_googlecalendar_sync || false
     });
 
     const [currentMilestones, setCurrentMilestones] = useState<ProjectMilestone[]>([]);
     const [currentMembers, setCurrentMembers] = useState<User[]>([]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Reset form when task changes
     useEffect(() => {
@@ -44,7 +50,7 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
             setCurrentMilestones(project?.milestones || []);
             const projectMembers = project?.members?.filter(member => member.user?.type !== 'client').map(member => member.user) || [];
             setCurrentMembers(projectMembers.length > 0 ? projectMembers : members);
-            
+
             setFormData({
                 project_id: task.project_id?.toString() || '',
                 milestone_id: task.milestone_id?.toString() || 'none',
@@ -53,7 +59,8 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
                 priority: task.priority,
                 start_date: task.start_date?.split('T')[0] || '',
                 end_date: task.end_date?.split('T')[0] || '',
-                assigned_to: task.assigned_to?.id?.toString() || 'none'
+                assigned_to: task.assigned_to?.id?.toString() || 'none',
+                is_googlecalendar_sync: task.is_googlecalendar_sync || false
             });
         } else {
             // Create mode - reset to defaults
@@ -65,7 +72,8 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
                 priority: 'medium',
                 start_date: '',
                 end_date: '',
-                assigned_to: 'none'
+                assigned_to: 'none',
+                is_googlecalendar_sync: false
             });
             setCurrentMilestones([]);
             setCurrentMembers([]);
@@ -74,18 +82,18 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
 
     const handleProjectChange = (projectId: string) => {
         setFormData(prev => ({
-            ...prev, 
-            project_id: projectId, 
-            milestone_id: 'none', 
+            ...prev,
+            project_id: projectId,
+            milestone_id: 'none',
             assigned_to: 'none'
         }));
-        
+
         const project = projects.find(p => p.id.toString() === projectId);
-        
+
         // Load project milestones
         const milestones = project?.milestones || [];
         setCurrentMilestones(milestones);
-        
+
         // Load project members (not clients)
         const projectMembers = project?.members?.filter(member => member.user?.type !== 'client').map(member => member.user) || [];
         setCurrentMembers(projectMembers.length > 0 ? projectMembers : members);
@@ -93,34 +101,38 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        setErrors({});
+
         const submitData = {
             ...formData,
             milestone_id: formData.milestone_id === 'none' ? '' : formData.milestone_id,
             assigned_to: formData.assigned_to === 'none' ? '' : formData.assigned_to
         };
-        
+
         if (isEditing) {
-            toast.loading(t('Updating task...'));
             router.put(route('tasks.update', task.id), submitData, {
                 onSuccess: () => {
-                    toast.dismiss();
+                    setIsSubmitting(false);
                     onClose();
                 },
-                onError: () => {
-                    toast.dismiss();
-                    toast.error(t('Failed to update task'));
+                onError: (errors) => {
+                    setIsSubmitting(false);
+                    setErrors(errors);
                 }
             });
         } else {
-            toast.loading(t('Creating task...'));
             router.post(route('tasks.store'), submitData, {
                 onSuccess: () => {
-                    toast.dismiss();
+                    setIsSubmitting(false);
                     onClose();
                 },
-                onError: () => {
-                    toast.dismiss();
-                    toast.error(t('Failed to create task'));
+                onError: (errors) => {
+                    setIsSubmitting(false);
+                    setErrors(errors);
                 }
             });
         }
@@ -132,18 +144,18 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
                 <DialogHeader>
                     <DialogTitle>{isEditing ? t('Edit Task') : t('Create Task')}</DialogTitle>
                 </DialogHeader>
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {!isEditing && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                {t('Project')} * <span className="text-xs text-gray-500">({t('Select to load milestones & team members')})</span>
+                                {t('Project')} <span className="text-red-500">*</span> <span className="text-xs text-gray-500">({t('Select to load milestones & team members')})</span>
                             </label>
-                            <Select value={formData.project_id || ''} onValueChange={handleProjectChange} required>
-                                <SelectTrigger>
+                            <Select value={formData.project_id || ''} onValueChange={handleProjectChange}>
+                                <SelectTrigger className={errors.project_id ? 'border-red-500' : ''}>
                                     <SelectValue placeholder={t('Select a project')} />
                                 </SelectTrigger>
-                                <SelectContent className="z-[9999]">
+                                <SelectContent searchable className="z-[9999]">
                                     {projects.map((project) => (
                                         <SelectItem key={project.id} value={project.id.toString()}>
                                             {project.title}
@@ -151,6 +163,7 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.project_id && <p className="text-sm text-red-600 mt-1">{errors.project_id}</p>}
                         </div>
                     )}
 
@@ -163,7 +176,7 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
                                 <SelectTrigger>
                                     <SelectValue placeholder={currentMilestones.length > 0 ? t('Select a milestone (optional)') : t('No milestones available')} />
                                 </SelectTrigger>
-                                <SelectContent className="z-[9999]">
+                                <SelectContent searchable className="z-[9999]">
                                     <SelectItem value="none">{t('No milestone')}</SelectItem>
                                     {currentMilestones.map((milestone) => (
                                         <SelectItem key={milestone.id} value={milestone.id.toString()}>
@@ -177,14 +190,15 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('Title')} *
+                            {t('Title')} <span className="text-red-500">*</span>
                         </label>
                         <Input
                             value={formData.title}
                             onChange={(e) => setFormData({...formData, title: e.target.value})}
                             placeholder={t('Enter task title')}
-                            required
+                            className={errors.title ? 'border-red-500' : ''}
                         />
+                        {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title}</p>}
                     </div>
 
                     <div>
@@ -219,21 +233,21 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Assign to
+                                {t('Assign to')}
                             </label>
-                            <Select 
-                                value={formData.assigned_to} 
+                            <Select
+                                value={formData.assigned_to}
                                 onValueChange={(value) => setFormData({...formData, assigned_to: value})}
                                 disabled={!formData.project_id}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder={!formData.project_id ? "Select project first" : currentMembers.length > 0 ? "Select assignee" : "No team members available"} />
+                                    <SelectValue placeholder={!formData.project_id ? t('Select project first') : currentMembers.length > 0 ? t('Select assignee') : t('No team members available')} />
                                 </SelectTrigger>
                                 <SelectContent className="z-[9999]">
-                                    <SelectItem value="none">Unassigned</SelectItem>
+                                    <SelectItem value="none">{t('Unassigned')}</SelectItem>
                                     {currentMembers.map((member) => (
                                         <SelectItem key={member.id} value={member.id.toString()}>
-                                            {member.name} {member.type !== 'client' ? '(Team)' : '(Client)'}
+                                            {member.name} {member.type !== 'client' ? t('(Team)') : t('(Client)')}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -243,35 +257,50 @@ export default function TaskFormModal({ isOpen, onClose, task, projects, members
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Date
-                            </label>
+                            <Label required className="block text-sm font-medium text-gray-700 mb-2">
+                                {t('Start Date')}
+                            </Label>
                             <Input
                                 type="date"
                                 value={formData.start_date}
+                                required
                                 onChange={(e) => setFormData({...formData, start_date: e.target.value})}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Due Date
-                            </label>
+                            <Label required className="block text-sm font-medium text-gray-700 mb-2">
+                                {t('Due Date')}
+                            </Label>
                             <Input
                                 type="date"
+                                required
                                 value={formData.end_date}
+                                min={formData.start_date}
                                 onChange={(e) => setFormData({...formData, end_date: e.target.value})}
                             />
                         </div>
                     </div>
 
+                    {googleCalendarEnabled && !isEditing && (
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="google-calendar-sync"
+                                checked={formData.is_googlecalendar_sync}
+                                onCheckedChange={(checked) => setFormData({...formData, is_googlecalendar_sync: checked})}
+                            />
+                            <label htmlFor="google-calendar-sync" className="text-sm font-medium text-gray-700">
+                                {t('Sync with Google Calendar')}
+                            </label>
+                        </div>
+                    )}
+
                     <div className="flex justify-end space-x-2 pt-4">
                         <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
+                            {t('Cancel')}
                         </Button>
-                        <Button type="submit">
-                            <Save className="h-4 w-4 mr-2" />
-                            {isEditing ? 'Update Task' : 'Create Task'}
+                        <Button type="submit" >
+                            {(isEditing ? t('Update') : t('Create'))}
                         </Button>
                     </div>
                 </form>

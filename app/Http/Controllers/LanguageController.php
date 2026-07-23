@@ -228,4 +228,60 @@ class LanguageController extends Controller
         $codePoints = array_map(fn($char) => 127397 + ord($char), $codePoints);
         return mb_convert_encoding('&#' . implode(';&#', $codePoints) . ';', 'UTF-8', 'HTML-ENTITIES');
     }
+
+    public function changeLanguage(Request $request)
+    {
+        $languageCode = $request->input('language');
+
+        // RTL languages that should automatically set layoutDirection to 'right'
+        $rtlLanguages = ['ar', 'he'];
+        $isRtl = in_array($languageCode, $rtlLanguages);
+
+        if (config('app.is_demo')) {
+            return redirect()->back()->cookie('app_language', $languageCode, 60 * 24 * 365);
+        }
+
+        if ($request->user()) {
+            $request->user()->update(['lang' => $languageCode]);
+
+            // Auto-update layoutDirection for RTL languages
+            if ($isRtl) {
+                updateSetting('layoutDirection', 'right', $request->user()->id);
+            }
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Update layout direction based on language
+     */
+    public function updateLayoutDirection(Request $request)
+    {
+        $request->validate([
+            'layoutDirection' => 'required|string|in:left,right'
+        ]);
+
+        $layoutDirection = $request->layoutDirection;
+
+        // If user is authenticated, update their layout direction setting
+        if (auth()->check()) {
+            $user = auth()->user();
+            \App\Models\Setting::updateOrCreate(
+                [
+                    'key' => 'layoutDirection',
+                    'user_id' => $user->id
+                ],
+                ['value' => $layoutDirection]
+            );
+        }
+        // For demo mode or unauthenticated users, we rely on cookies/localStorage
+        // which are handled on the frontend
+
+        return response()->json([
+            'success' => true,
+            'layoutDirection' => $layoutDirection,
+            'message' => __('Layout direction updated successfully')
+        ]);
+    }
 }

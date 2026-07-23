@@ -10,10 +10,12 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Globe, Plus } from 'lucide-react';
-import { usePage } from '@inertiajs/react';
+import { Globe, Plus, Settings } from 'lucide-react';
+import { usePage, router } from '@inertiajs/react';
 import { hasRole } from '@/utils/authorization';
 import { CreateLanguageModal } from '@/components/create-language-modal';
+import { useLayout } from '@/contexts/LayoutContext';
+import { isDemoMode, setCookie, getCookie } from '@/utils/cookie-utils';
 
 interface Language {
     code: string;
@@ -21,45 +23,131 @@ interface Language {
     countryCode: string;
     enabled?: boolean;
 }
+
 export const LanguageSwitcher: React.FC = () => {
     const { t, i18n } = useTranslation();
-    const { auth, is_saas, globalSettings } = usePage().props as any;
+    const { auth, globalSettings, isSaasMode = true } = usePage().props as any;
+    const { updatePosition } = useLayout();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [currentLanguage, setCurrentLanguage] = useState<Language | null>(null);
-    
+
     const availableLanguages = globalSettings?.availableLanguages || [];
-    
+
     useEffect(() => {
         const languages = (availableLanguages || []).filter((l: any) => l.enabled !== false);
         const lang = languages.find((l: Language) => l.code === i18n.language) || languages[0];
         setCurrentLanguage(lang);
+
+        // DON'T automatically change layout direction based on language
+        // Only sync it when language is explicitly changed by user via handleLanguageChange
+        // This prevents overriding manual RTL/LTR selections
     }, [i18n.language, availableLanguages]);
 
-    // Note: Removed automatic language switching when disabled
-    // Users can keep their selected language even if disabled by superadmin
-
     const isAuthenticated = auth?.user;
-    const userRoles = auth?.user?.roles?.map((role: any) => role.name) || [];
-    const isSuperAdmin = isAuthenticated && hasRole('superadmin', userRoles);
-    
-    // Allow company users to manage languages when not in SaaS mode
-    const isCompanyUser = userRoles.includes('company');
-    const canManageLanguages = isSuperAdmin || (!is_saas && isCompanyUser);
-    
+    const userRoles = auth?.roles || auth?.user?.roles?.map((role: any) => role.name) || [];
+    const isSuperAdmin = isAuthenticated && (hasRole('superadmin', userRoles) || auth?.user?.type === 'superadmin');
+    const isWorkspaceOwner = auth?.user?.workspace_role === 'owner';
 
 
-    const handleLanguageChange = (languageCode: string) => {
+    const canManageLanguages = (isSaasMode && isSuperAdmin) || (!isSaasMode && isWorkspaceOwner);
+
+    // RTL languages list
+    const rtlLanguages = ['ar', 'he'];
+
+    const handleLanguageChange = async (languageCode: string) => {
         const lang = availableLanguages.find((l: Language) => l.code === languageCode);
         if (lang) {
             setCurrentLanguage(lang);
-            i18n.changeLanguage(languageCode);
+            try {
+                await i18n.changeLanguage(languageCode);
+
+                const isRtl = rtlLanguages.includes(languageCode);
+                let newDirection: string;
+                
+                if (isDemoMode()) {
+                    // In demo mode, preserve current layoutDirection from brandSettings cookie
+                    const brandSettingsCookie = getCookie('brandSettings');
+                    let currentDirection = 'left';
+                    if (brandSettingsCookie) {
+                        try {
+                            const parsed = JSON.parse(brandSettingsCookie);
+                            currentDirection = parsed.layoutDirection || 'left';
+                        } catch (error) {
+                            console.error('Failed to parse brandSettings cookie', error);
+                        }
+                    }
+                    // In demo mode, set direction based on language: right for RTL, left for non-RTL
+                    newDirection = isRtl ? 'right' : 'left';
+                } else {
+                    // In main version, set direction based on language: right for RTL, left for non-RTL
+                    newDirection = isRtl ? 'right' : 'left';
+                }
+
+                updatePosition(newDirection as 'left' | 'right');
+
+                // Save layoutDirection to database/cookies when RTL language is selected
+                if (isAuthenticated && !isDemoMode()) {
+                    // Save language change for authenticated non-demo users
+                    router.post(route('languages.change'), {
+                        language: languageCode
+                    }, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            // After language is saved, update layoutDirection if RTL
+                            if (isRtl || (!isRtl && globalSettings?.layoutDirection === 'right')) {
+                                router.post(route('settings.brand.update'), {
+                                    settings: {
+                                        layoutDirection: newDirection
+                                    }
+                                }, {
+                                    preserveScroll: true,
+                                    onError: (errors) => {
+                                        console.error('Failed to update layout direction:', errors);
+                                    }
+                                });
+                            }
+                        },
+                        onError: (errors) => {
+                            console.error('Failed to change language:', errors);
+                        }
+                    });
+                } else {
+                    // For demo mode or non-authenticated users, save to cookies and localStorage
+                    setCookie('app_language', languageCode);
+                    setCookie('layoutDirection', newDirection);
+                    localStorage.setItem('i18nextLng', languageCode);
+
+                    // Also update brandSettings cookie to keep it in sync
+                    const currentBrandSettings = getCookie('brandSettings');
+                    let brandSettings = {};
+                    if (currentBrandSettings) {
+                        try {
+                            brandSettings = JSON.parse(currentBrandSettings);
+                        } catch (error) {
+                            console.error('Failed to parse brand settings from cookie', error);
+                        }
+                    }
+                    setCookie('brandSettings', JSON.stringify({
+                        ...brandSettings,
+                        layoutDirection: newDirection
+                    }));
+                }
+
+                window.dispatchEvent(new CustomEvent('languageChanged', {
+                    detail: { language: languageCode, direction: newDirection }
+                }));
+
+                window.dispatchEvent(new Event('resize'));
+            } catch (error) {
+                console.error('Error changing language:', error);
+            }
         }
     };
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 h-8 rounded-md">
+                <Button variant="ghost" className="flex items-center gap-2 rounded-md shadow-sm border bg-white">
                     <Globe className="h-4 w-4" />
                     {currentLanguage && (
                         <>
@@ -103,7 +191,7 @@ export const LanguageSwitcher: React.FC = () => {
                 {canManageLanguages && (
                     <>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                             onClick={() => setShowCreateModal(true)}
                             className="justify-center text-primary font-semibold cursor-pointer"
                         >
@@ -112,6 +200,7 @@ export const LanguageSwitcher: React.FC = () => {
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild className="justify-center text-primary font-semibold cursor-pointer">
                             <a href={route('manage-language')} rel="noopener noreferrer">
+                                <Settings className="h-4 w-4 mr-2" />
                                 {t('Manage Language')}
                             </a>
                         </DropdownMenuItem>

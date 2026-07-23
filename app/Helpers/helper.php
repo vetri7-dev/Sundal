@@ -1398,3 +1398,370 @@ if (! function_exists('isTelegramNotificationEnabled')) {
         return $notifications[$notificationType] ?? false;
     }
 }
+
+if (! function_exists('upload_file')) {
+    function upload_file($request, $key_name, $name, $path, $custom_validation = [])
+    {
+        try {
+            $storage_settings = settings();
+            if (!isset($storage_settings['storage_type'])) {
+                $storage_settings['storage_type'] = 'local';
+            }
+            $max_size  = !empty($storage_settings['storage_max_upload_size']) ? $storage_settings['storage_max_upload_size'] : '2048';
+            $mimes     = !empty($storage_settings['storage_file_types'])      ? $storage_settings['storage_file_types']      : 'jpeg,jpg,png,svg,zip,txt,gif,docx';
+            if ($storage_settings['storage_type'] == 'wasabi') {
+                config(['filesystems.disks.wasabi.driver'=>'s3','filesystems.disks.wasabi.key'=>$storage_settings['wasabi_access_key'],'filesystems.disks.wasabi.secret'=>$storage_settings['wasabi_secret_key'],'filesystems.disks.wasabi.region'=>$storage_settings['wasabi_region']??'us-east-1','filesystems.disks.wasabi.bucket'=>$storage_settings['wasabi_bucket'],'filesystems.disks.wasabi.endpoint'=>$storage_settings['wasabi_url'],'filesystems.disks.wasabi.root'=>$storage_settings['wasabi_root'],'filesystems.disks.wasabi.visibility'=>'public']);
+            } elseif ($storage_settings['storage_type'] == 'aws_s3') {
+                config(['filesystems.disks.s3.driver'=>'s3','filesystems.disks.s3.key'=>$storage_settings['aws_access_key_id'],'filesystems.disks.s3.secret'=>$storage_settings['aws_secret_access_key'],'filesystems.disks.s3.region'=>$storage_settings['aws_default_region']??'us-east-1','filesystems.disks.s3.bucket'=>$storage_settings['aws_bucket'],'filesystems.disks.s3.url'=>$storage_settings['aws_url']??null,'filesystems.disks.s3.endpoint'=>$storage_settings['aws_endpoint']??null,'filesystems.disks.s3.visibility'=>'public']);
+            }
+            $file = $request->$key_name;
+            $extension = strtolower($file->getClientOriginalExtension());
+            $allowed = explode(',', $mimes);
+            if (empty($extension) || !in_array($extension, $allowed)) {
+                return ['status' => false, 'msg' => 'The '.$key_name.' must be a file of type: '.implode(', ', $allowed).'.'];
+            }
+            $validation = count($custom_validation) > 0 ? $custom_validation : ['mimes:'.$mimes, 'max:'.$max_size];
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [$key_name => $validation]);
+            if ($validator->fails()) {
+                return ['status' => false, 'msg' => $validator->messages()->first()];
+            }
+            $storageType = $storage_settings['storage_type'] ?? 'local';
+            $diskName = match ($storageType) { 'aws_s3' => 's3', 'wasabi' => 'wasabi', default => 'public' };
+            $file->storeAs('media/'.$path, $name, $diskName);
+            return ['status' => true, 'msg' => 'success', 'url' => $path.'/'.$name];
+        } catch (\Exception $e) {
+            return ['status' => false, 'msg' => $e->getMessage()];
+        }
+    }
+}
+
+if (! function_exists('delete_file')) {
+    function delete_file($filePath)
+    {
+        try {
+            $storage_settings = settings();
+            $storage_type = $storage_settings['storage_type'] ?? 'local';
+            if ($storage_type == 'wasabi') {
+                config(['filesystems.disks.wasabi.key'=>$storage_settings['wasabi_access_key'],'filesystems.disks.wasabi.secret'=>$storage_settings['wasabi_secret_key'],'filesystems.disks.wasabi.region'=>$storage_settings['wasabi_region']??'us-east-1','filesystems.disks.wasabi.bucket'=>$storage_settings['wasabi_bucket'],'filesystems.disks.wasabi.endpoint'=>$storage_settings['wasabi_url'],'filesystems.disks.wasabi.root'=>$storage_settings['wasabi_root']]);
+                $diskName = 'wasabi';
+            } elseif ($storage_type == 'aws_s3') {
+                config(['filesystems.disks.s3.key'=>$storage_settings['aws_access_key_id'],'filesystems.disks.s3.secret'=>$storage_settings['aws_secret_access_key'],'filesystems.disks.s3.region'=>$storage_settings['aws_default_region']??'us-east-1','filesystems.disks.s3.bucket'=>$storage_settings['aws_bucket']]);
+                $diskName = 's3';
+            } else {
+                $diskName = 'public';
+            }
+            if (\Illuminate\Support\Facades\Storage::disk($diskName)->exists('media/'.$filePath)) {
+                \Illuminate\Support\Facades\Storage::disk($diskName)->delete('media/'.$filePath);
+                return true;
+            }
+            return false;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+}
+
+if (! function_exists('download_file')) {
+    function download_file($filePath, $fileName = null)
+    {
+        try {
+            $storage_settings = settings();
+            $storage_type = $storage_settings['storage_type'] ?? 'local';
+            if ($storage_type == 'wasabi') {
+                config(['filesystems.disks.wasabi.key'=>$storage_settings['wasabi_access_key'],'filesystems.disks.wasabi.secret'=>$storage_settings['wasabi_secret_key'],'filesystems.disks.wasabi.region'=>$storage_settings['wasabi_region']??'us-east-1','filesystems.disks.wasabi.bucket'=>$storage_settings['wasabi_bucket'],'filesystems.disks.wasabi.endpoint'=>$storage_settings['wasabi_url'],'filesystems.disks.wasabi.root'=>$storage_settings['wasabi_root']]);
+                $diskName = 'wasabi';
+            } elseif ($storage_type == 'aws_s3') {
+                config(['filesystems.disks.s3.key'=>$storage_settings['aws_access_key_id'],'filesystems.disks.s3.secret'=>$storage_settings['aws_secret_access_key'],'filesystems.disks.s3.region'=>$storage_settings['aws_default_region']??'us-east-1','filesystems.disks.s3.bucket'=>$storage_settings['aws_bucket']]);
+                $diskName = 's3';
+            } else {
+                $diskName = 'public';
+            }
+            if (!\Illuminate\Support\Facades\Storage::disk($diskName)->exists('media/'.$filePath)) {
+                abort(404, 'File not found.');
+            }
+            return \Illuminate\Support\Facades\Storage::disk($diskName)->download('media/'.$filePath, $fileName ?? basename($filePath));
+        } catch (\Exception $e) {
+            abort(404, 'File not found.');
+        }
+    }
+}
+
+if (! function_exists('enableWorkspaceInvitationForUser')) {
+    function enableWorkspaceInvitationForUser($userId, $workspaceId = null)
+    {
+        $template = \App\Models\EmailTemplate::where('name', 'Workspace Invitation')->first();
+        if ($template) {
+            \App\Models\UserEmailTemplate::updateOrCreate(
+                ['user_id' => $userId, 'template_id' => $template->id, 'workspace_id' => $workspaceId],
+                ['is_active' => true]
+            );
+        }
+    }
+}
+
+if (! function_exists('getAdminAllSetting')) {
+    function getAdminAllSetting()
+    {
+        return \Illuminate\Support\Facades\Cache::rememberForever('admin_settings', function () {
+            if (isSaasMode()) {
+                $superAdmin = \App\Models\User::where('type', 'superadmin')->first();
+            } else {
+                $superAdmin = \App\Models\User::where('type', 'company')->first();
+            }
+            $settings = [];
+            if ($superAdmin) {
+                $settings = \App\Models\Setting::where('user_id', $superAdmin->id)->pluck('value', 'key')->toArray();
+            }
+            return $settings;
+        });
+    }
+}
+
+if (! function_exists('check_file')) {
+    function check_file($path)
+    {
+        try {
+            if (empty($path)) {
+                return false;
+            }
+            if (str_starts_with($path, 'http') || str_starts_with($path, 'https')) {
+                return true;
+            }
+            $storage_settings = getAdminAllSetting();
+            if (! isset($storage_settings['storage_type'])) {
+                return false;
+            }
+            $storageType = $storage_settings['storage_type'];
+            if ($storageType === 'local' || $storageType === null) {
+                $publicPath = storage_path('app/public/media/'.ltrim($path, '/'));
+                if (file_exists($publicPath)) {
+                    return true;
+                }
+                return file_exists(base_path($path));
+            }
+            if ($storageType === 'aws_s3') {
+                if (empty($storage_settings['aws_access_key_id']) || empty($storage_settings['aws_secret_access_key']) ||
+                    empty($storage_settings['aws_default_region']) || empty($storage_settings['aws_bucket'])) {
+                    return false;
+                }
+                config([
+                    'filesystems.disks.s3.key'    => $storage_settings['aws_access_key_id'],
+                    'filesystems.disks.s3.secret' => $storage_settings['aws_secret_access_key'],
+                    'filesystems.disks.s3.region' => $storage_settings['aws_default_region'] ?? 'us-east-1',
+                    'filesystems.disks.s3.bucket' => $storage_settings['aws_bucket'],
+                ]);
+                return \Illuminate\Support\Facades\Storage::disk('s3')->exists('media/'.ltrim($path, '/'));
+            }
+            if ($storageType === 'wasabi') {
+                if (empty($storage_settings['wasabi_access_key']) || empty($storage_settings['wasabi_secret_key']) ||
+                    empty($storage_settings['wasabi_region']) || empty($storage_settings['wasabi_bucket'])) {
+                    return false;
+                }
+                config([
+                    'filesystems.disks.wasabi.key'      => $storage_settings['wasabi_access_key'],
+                    'filesystems.disks.wasabi.secret'   => $storage_settings['wasabi_secret_key'],
+                    'filesystems.disks.wasabi.region'   => $storage_settings['wasabi_region'] ?? 'us-east-1',
+                    'filesystems.disks.wasabi.bucket'   => $storage_settings['wasabi_bucket'],
+                    'filesystems.disks.wasabi.endpoint' => $storage_settings['wasabi_url'] ?? null,
+                    'filesystems.disks.wasabi.root'     => $storage_settings['wasabi_root'] ?? '',
+                ]);
+                return \Illuminate\Support\Facades\Storage::disk('wasabi')->exists('media/'.ltrim($path, '/'));
+            }
+            return false;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('check_file error: '.$e->getMessage(), ['path' => $path]);
+            return false;
+        }
+    }
+}
+
+if (! function_exists('get_file')) {
+    function get_file($path)
+    {
+        try {
+            if (empty($path)) {
+                return '';
+            }
+            if (str_starts_with($path, 'http') || str_starts_with($path, 'https')) {
+                return $path;
+            }
+            $storage_settings = getAdminAllSetting();
+            if (! isset($storage_settings['storage_type'])) {
+                return url('storage/media/'.ltrim($path, '/'));
+            }
+            $storageType = $storage_settings['storage_type'];
+            if ($storageType === 'aws_s3' || $storageType === 's3') {
+                if (empty($storage_settings['s3_key']) || empty($storage_settings['s3_secret']) ||
+                    empty($storage_settings['s3_region']) || empty($storage_settings['s3_bucket'])) {
+                    return url('storage/media/'.ltrim($path, '/'));
+                }
+                config([
+                    'filesystems.disks.s3.key'    => $storage_settings['s3_key'],
+                    'filesystems.disks.s3.secret' => $storage_settings['s3_secret'],
+                    'filesystems.disks.s3.region' => $storage_settings['s3_region'],
+                    'filesystems.disks.s3.bucket' => $storage_settings['s3_bucket'],
+                ]);
+                return \Illuminate\Support\Facades\Storage::disk('s3')->url('media/'.ltrim($path, '/'));
+            }
+            if ($storageType === 'wasabi') {
+                if (empty($storage_settings['wasabi_key']) || empty($storage_settings['wasabi_secret']) ||
+                    empty($storage_settings['wasabi_region']) || empty($storage_settings['wasabi_bucket'])) {
+                    return url('storage/media/'.ltrim($path, '/'));
+                }
+                config([
+                    'filesystems.disks.wasabi.key'      => $storage_settings['wasabi_key'],
+                    'filesystems.disks.wasabi.secret'   => $storage_settings['wasabi_secret'],
+                    'filesystems.disks.wasabi.region'   => $storage_settings['wasabi_region'],
+                    'filesystems.disks.wasabi.bucket'   => $storage_settings['wasabi_bucket'],
+                    'filesystems.disks.wasabi.root'     => $storage_settings['wasabi_root'],
+                    'filesystems.disks.wasabi.endpoint' => $storage_settings['wasabi_url'],
+                ]);
+                return \Illuminate\Support\Facades\Storage::disk('wasabi')->url('media/'.ltrim($path, '/'));
+            }
+            return url('storage/media/'.ltrim($path, '/'));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('get_file error: '.$e->getMessage(), ['path' => $path]);
+            return asset($path);
+        }
+    }
+}
+
+if (! function_exists('isRegistrationEnabled')) {
+    function isRegistrationEnabled()
+    {
+        return getSetting('registrationEnabled', true) === true || getSetting('registrationEnabled', true) === '1';
+    }
+}
+
+if (! function_exists('defultnotificationAndsetting')) {
+    function defultnotificationAndsetting($user)
+    {
+        $templates = \App\Models\NotificationTemplate::all();
+        foreach ($templates as $template) {
+            $defaultLangs = \App\Models\NotificationTemplateLang::where('parent_id', $template->id)->where('created_by', 1)->get();
+            foreach ($defaultLangs as $defaultLang) {
+                \App\Models\NotificationTemplateLang::updateOrCreate(
+                    ['parent_id' => $template->id, 'lang' => $defaultLang->lang, 'created_by' => $user],
+                    ['title' => $defaultLang->title, 'content' => $defaultLang->content]
+                );
+            }
+        }
+    }
+}
+
+if (! function_exists('getPaymentMethodConfig2')) {
+    function getPaymentMethodConfig2($method, $userId = null, $workspaceId = null)
+    {
+        $settings = getPaymentSettings($userId, $workspaceId);
+        $enabled = isPaymentMethodEnabled($method, $userId, $workspaceId);
+        switch ($method) {
+            case 'paytr':      return ['enabled'=>$enabled,'merchant_id'=>$settings['paytr_merchant_id']??null,'merchant_key'=>$settings['paytr_merchant_key']??null,'merchant_salt'=>$settings['paytr_merchant_salt']??null];
+            case 'mollie':     return ['enabled'=>$enabled,'api_key'=>$settings['mollie_api_key']??null];
+            case 'toyyibpay':  return ['enabled'=>$enabled,'category_code'=>$settings['toyyibpay_category_code']??null,'secret_key'=>$settings['toyyibpay_secret_key']??null,'mode'=>$settings['toyyibpay_mode']??'sandbox'];
+            case 'cashfree':   return ['enabled'=>$enabled,'mode'=>$settings['cashfree_mode']??'sandbox','public_key'=>$settings['cashfree_public_key']??null,'secret_key'=>$settings['cashfree_secret_key']??null];
+            case 'iyzipay':    return ['enabled'=>$enabled,'mode'=>$settings['iyzipay_mode']??'sandbox','public_key'=>$settings['iyzipay_public_key']??null,'secret_key'=>$settings['iyzipay_secret_key']??null];
+            case 'benefit':    return ['enabled'=>$enabled,'mode'=>$settings['benefit_mode']??'sandbox','public_key'=>$settings['benefit_public_key']??null,'secret_key'=>$settings['benefit_secret_key']??null];
+            case 'ozow':       return ['enabled'=>$enabled,'mode'=>$settings['ozow_mode']??'sandbox','site_key'=>$settings['ozow_site_key']??null,'private_key'=>$settings['ozow_private_key']??null,'api_key'=>$settings['ozow_api_key']??null];
+            case 'easebuzz':   return ['enabled'=>$enabled,'merchant_key'=>$settings['easebuzz_merchant_key']??null,'salt_key'=>$settings['easebuzz_salt_key']??null,'environment'=>$settings['easebuzz_environment']??'test'];
+            case 'khalti':     return ['enabled'=>$enabled,'public_key'=>$settings['khalti_public_key']??null,'secret_key'=>$settings['khalti_secret_key']??null];
+            case 'authorizenet':return ['enabled'=>$enabled,'mode'=>$settings['authorizenet_mode']??'sandbox','merchant_id'=>$settings['authorizenet_merchant_id']??null,'transaction_key'=>$settings['authorizenet_transaction_key']??null];
+            case 'fedapay':    return ['enabled'=>$enabled,'mode'=>$settings['fedapay_mode']??'sandbox','public_key'=>$settings['fedapay_public_key']??null,'secret_key'=>$settings['fedapay_secret_key']??null];
+            case 'payhere':    return ['enabled'=>$enabled,'mode'=>$settings['payhere_mode']??'sandbox','merchant_id'=>$settings['payhere_merchant_id']??null,'merchant_secret'=>$settings['payhere_merchant_secret']??null];
+            case 'cinetpay':   return ['enabled'=>$enabled,'site_id'=>$settings['cinetpay_site_id']??null,'api_key'=>$settings['cinetpay_api_key']??null,'secret_key'=>$settings['cinetpay_secret_key']??null];
+            case 'midtrans':   return ['enabled'=>$enabled,'mode'=>$settings['midtrans_mode']??'sandbox','secret_key'=>$settings['midtrans_secret_key']??null,'client_key'=>$settings['midtrans_client_key']??null];
+            default:           return [];
+        }
+    }
+}
+
+if (! function_exists('emailNotificationEnabled')) {
+    function emailNotificationEnabled($userId = null, $workspaceId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        if (is_null($workspaceId) && auth()->check() && auth()->user()->type === 'company') {
+            $workspaceId = auth()->user()->current_workspace_id;
+        }
+        $template = \App\Models\EmailTemplate::where('name', 'Invoice Notification')->first();
+        if (!$template) return false;
+        $userTemplate = \App\Models\UserEmailTemplate::where('user_id', $userId)->where('template_id', $template->id)->where('workspace_id', $workspaceId)->first();
+        return $userTemplate ? $userTemplate->is_active : false;
+    }
+}
+
+if (! function_exists('isTelegramEnabled')) {
+    function isTelegramEnabled($userId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        return getSetting('telegram_enabled', false, $userId) === '1';
+    }
+}
+
+if (! function_exists('isSlackEnabled')) {
+    function isSlackEnabled($userId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        return getSetting('slack_enabled', false, $userId) === '1';
+    }
+}
+
+if (! function_exists('getSlackWebhookUrl')) {
+    function getSlackWebhookUrl($userId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        return getSetting('slack_webhook_url', '', $userId);
+    }
+}
+
+if (! function_exists('getTelegramConfig')) {
+    function getTelegramConfig()
+    {
+        return ['telegram_bot_token' => getSetting('telegram_bot_token', ''), 'telegram_chat_id' => getSetting('telegram_chat_id', '')];
+    }
+}
+
+if (! function_exists('isNotificationTypeEnabled')) {
+    function isNotificationTypeEnabled($templateName, $type, $userId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        return \App\Models\UserNotificationTemplate::isNotificationActive($templateName, $userId, $type);
+    }
+}
+
+if (! function_exists('setNotificationTypeStatus')) {
+    function setNotificationTypeStatus($templateName, $type, $isActive, $userId = null)
+    {
+        if (is_null($userId)) $userId = createdBy();
+        return \App\Models\UserNotificationTemplate::setNotificationStatus($templateName, $userId, $type, $isActive);
+    }
+}
+
+if (! function_exists('createDefaultNotificationTemplates')) {
+    function createDefaultNotificationTemplates($companyId)
+    {
+        $languages = json_decode(file_get_contents(resource_path('lang/language.json')), true);
+        $langCodes = collect($languages)->pluck('code')->toArray();
+        $templates = \App\Models\NotificationTemplate::all();
+        foreach ($templates as $template) {
+            foreach ($langCodes as $langCode) {
+                if (\App\Models\NotificationTemplateLang::where('parent_id', $template->id)->where('lang', $langCode)->where('created_by', $companyId)->exists()) continue;
+                $global = \App\Models\NotificationTemplateLang::where('parent_id', $template->id)->where('lang', $langCode)->where('created_by', 1)->first();
+                if ($global) {
+                    \App\Models\NotificationTemplateLang::create(['parent_id'=>$template->id,'lang'=>$langCode,'title'=>$global->title,'content'=>$global->content,'created_by'=>$companyId]);
+                }
+            }
+        }
+    }
+}
+
+if (! function_exists('createDefaultNotificationTemplateSettings')) {
+    function createDefaultNotificationTemplateSettings($userId)
+    {
+        $templates = \App\Models\NotificationTemplate::all();
+        foreach ($templates as $template) {
+            \App\Models\UserNotificationTemplate::updateOrCreate(
+                ['user_id' => $userId, 'template_id' => $template->id],
+                ['is_active' => false]
+            );
+        }
+    }
+}

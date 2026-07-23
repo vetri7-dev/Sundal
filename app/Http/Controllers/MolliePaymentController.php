@@ -384,7 +384,7 @@ class MolliePaymentController extends Controller
                                 );
                                 
                                 return redirect()->route('invoices.show', $invoice->id)
-                                    ->with('success', __('Mollie payment completed successfully'));
+                                    ->with('success', __('Payment completed successfully!'));
                             }
                         } catch (\Exception $e) {
                             // Fallback to demo payment
@@ -399,7 +399,7 @@ class MolliePaymentController extends Controller
                     );
                     
                     return redirect()->route('invoices.show', $invoice->id)
-                        ->with('success', __('Mollie payment completed successfully'));
+                        ->with('success', __('Payment completed successfully!'));
                 }
             }
             
@@ -413,5 +413,118 @@ class MolliePaymentController extends Controller
     public function invoiceCallback(Request $request)
     {
         return response('OK', 200);
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_mollie_enabled']) || $settings['is_mollie_enabled'] !== '1') {
+                return response()->json(['error' => 'Mollie not enabled'], 400);
+            }
+
+            if (!isset($settings['mollie_api_key'])) {
+                return response()->json(['error' => 'Mollie not configured'], 400);
+            }
+
+            $credentials = $this->getMollieCredentials($invoice->created_by);
+            $paymentId = 'mollie_inv_' . $invoice->id . '_' . time() . '_' . uniqid();
+
+            // Initialize Mollie SDK
+            $mollie = new MollieApiClient();
+            $mollie->setApiKey($credentials['api_key']);
+
+            $paymentData = [
+                'amount' => [
+                    'currency' => 'EUR',
+                    'value' => number_format($request->amount, 2, '.', '')
+                ],
+                'description' => 'Invoice #' . $invoice->invoice_number . ' Payment',
+                'redirectUrl' => route('mollie.invoice.success.link', [
+                    'token' => $token,
+                    'amount' => $request->amount
+                ]),
+                'metadata' => [
+                    'payment_id' => $paymentId,
+                    'invoice_id' => $invoice->id,
+                    'invoice_token' => $token,
+                    'amount' => $request->amount
+                ]
+            ];
+
+            // Only add webhook URL if not localhost
+            if (!str_contains(config('app.url'), 'localhost')) {
+                $paymentData['webhookUrl'] = route('mollie.invoice.callback');
+            }
+
+            $payment = $mollie->payments->create($paymentData);
+
+            return response()->json([
+                'success' => true,
+                'payment_url' => $payment->getCheckoutUrl()
+            ]);
+            
+        } catch (ValidationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Payment processing failed. Please try again.'], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $amount = $request->input('amount');
+            $paymentId = $request->input('id');
+            
+            if ($amount) {
+                $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+                $credentials = $this->getMollieCredentials($invoice->created_by);
+                
+                if ($paymentId && $credentials['api_key']) {
+                    try {
+                        $mollie = new MollieApiClient();
+                        $mollie->setApiKey($credentials['api_key']);
+                        $payment = $mollie->payments->get($paymentId);
+                        
+                        if ($payment->isPaid()) {
+                            $invoice->createPaymentRecord(
+                                $amount,
+                                'mollie',
+                                $paymentId
+                            );
+                            
+                            return redirect()->route('invoices.payment', $token)
+                                ->with('success', 'Payment processed successfully.');
+                        }
+                    } catch (\Exception $e) {
+                        // Fallback to demo payment
+                    }
+                }
+                
+                // Demo fallback
+                $invoice->createPaymentRecord(
+                    $amount,
+                    'mollie',
+                    $paymentId ?: 'mollie_' . time()
+                );
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+            
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
+        }
     }
 }

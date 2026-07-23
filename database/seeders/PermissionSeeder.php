@@ -44,6 +44,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'project_track_progress', 'module' => 'projects', 'label' => 'Track Project Progress', 'description' => 'Monitor project completion'],
             ['name' => 'project_manage_notes', 'module' => 'projects', 'label' => 'Manage Project Notes', 'description' => 'Add/edit project notes'],
             ['name' => 'project_view_activity', 'module' => 'projects', 'label' => 'View Project Activity', 'description' => 'View project activity log'],
+            ['name' => 'project_manage_shared_settings', 'module' => 'projects', 'label' => 'Manage Project Shared Settings', 'description' => 'Configure project sharing and password protection'],
+            ['name' => 'project_view_gantt', 'module' => 'projects', 'label' => 'View Gantt Chart', 'description' => 'Access project Gantt chart view'],
+            ['name' => 'project_manage_permissions', 'module' => 'projects', 'label' => 'Manage Project Permissions', 'description' => 'Manage individual user permissions for project'],
 
             // Task Module
             ['name' => 'task_view_any', 'module' => 'tasks', 'label' => 'View All Tasks', 'description' => 'View all tasks in workspace'],
@@ -337,6 +340,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'settings_telegram', 'module' => 'settings', 'label' => 'Manage Telegram Settings', 'description' => 'Configure Telegram integration settings'],
             ['name' => 'settings_webhook', 'module' => 'settings', 'label' => 'Manage Webhook Settings', 'description' => 'Configure webhook settings'],
             ['name' => 'settings_zoom', 'module' => 'settings', 'label' => 'Manage Zoom Settings', 'description' => 'Configure Zoom integration settings'],
+            ['name' => 'settings_tax', 'module' => 'settings', 'label' => 'Manage Tax Settings', 'description' => 'Configure tax rates and settings'],
             ['name' => 'settings_manage', 'module' => 'settings', 'label' => 'Manage Settings', 'description' => 'Manage general settings'],
 
             // Zoom Meeting Module
@@ -349,7 +353,116 @@ class PermissionSeeder extends Seeder
             ['name' => 'zoom_meeting_start', 'module' => 'zoom_meeting', 'label' => 'Start Zoom Meeting', 'description' => 'Start Zoom meeting as host'],
             ['name' => 'zoom_meeting_manage_attendees', 'module' => 'zoom_meeting', 'label' => 'Manage Meeting Attendees', 'description' => 'Add/remove meeting attendees'],
             ['name' => 'zoom_meeting_assign_project', 'module' => 'zoom_meeting', 'label' => 'Assign Meeting to Project', 'description' => 'Link meeting to project'],
-            ['name' => 'zoom_meeting_view_calendar', 'module' => 'zoom_meeting', 'label' => 'View Meeting Calendar', 'description' => 'Access meeting calendar view']
+            ['name' => 'zoom_meeting_view_calendar', 'module' => 'zoom_meeting', 'label' => 'View Meeting Calendar', 'description' => 'Access meeting calendar view'],
+
+            // Google Meeting Module
+            ['name' => 'google_meeting_view_any', 'module' => 'google_meeting', 'label' => 'View All Google Meetings', 'description' => 'View all Google meetings in workspace'],
+            ['name' => 'google_meeting_view', 'module' => 'google_meeting', 'label' => 'View Google Meeting', 'description' => 'View individual Google meeting'],
+            ['name' => 'google_meeting_create', 'module' => 'google_meeting', 'label' => 'Create Google Meeting', 'description' => 'Create new Google meeting'],
+            ['name' => 'google_meeting_update', 'module' => 'google_meeting', 'label' => 'Update Google Meeting', 'description' => 'Modify Google meeting information'],
+            ['name' => 'google_meeting_delete', 'module' => 'google_meeting', 'label' => 'Delete Google Meeting', 'description' => 'Remove Google meeting'],
+            ['name' => 'google_meeting_join', 'module' => 'google_meeting', 'label' => 'Join Google Meeting', 'description' => 'Join Google meeting as participant'],
+            ['name' => 'google_meeting_start', 'module' => 'google_meeting', 'label' => 'Start Google Meeting', 'description' => 'Start Google meeting as host'],
+            ['name' => 'google_meeting_manage_attendees', 'module' => 'google_meeting', 'label' => 'Manage Meeting Attendees', 'description' => 'Add/remove meeting attendees'],
+            ['name' => 'google_meeting_assign_project', 'module' => 'google_meeting', 'label' => 'Assign Meeting to Project', 'description' => 'Link meeting to project'],
+            ['name' => 'google_meeting_view_calendar', 'module' => 'google_meeting', 'label' => 'View Meeting Calendar', 'description' => 'Access meeting calendar view'],
+
+            // Tax Module
+            ['name' => 'tax_view_any', 'module' => 'tax', 'label' => 'View All Taxes', 'description' => 'View all tax configurations'],
+            ['name' => 'tax_view', 'module' => 'tax', 'label' => 'View Tax', 'description' => 'View individual tax configuration'],
+            ['name' => 'tax_create', 'module' => 'tax', 'label' => 'Create Tax', 'description' => 'Add new tax configuration'],
+            ['name' => 'tax_update', 'module' => 'tax', 'label' => 'Update Tax', 'description' => 'Modify tax configuration'],
+            ['name' => 'tax_delete', 'module' => 'tax', 'label' => 'Delete Tax', 'description' => 'Remove tax configuration'],
+            ['name' => 'settings_invoice', 'module' => 'settings', 'label' => 'Manage Invoice Settings', 'description' => 'Configure invoice templates, QR codes, and colors'],
+            
+            ['name' => 'settings_google_calendar', 'module' => 'settings', 'label' => 'Manage Google Calendar Settings', 'description' => 'Configure Google Calendar integration (company only)'],
+            ['name' => 'settings_google_meet', 'module' => 'settings', 'label' => 'Manage Google Meet Settings', 'description' => 'Configure Google Meet integration settings'],
+
+            // Calendar Module
+            ['name' => 'calendar_view', 'module' => 'calendar', 'label' => 'View Calendar', 'description' => 'Access calendar view'],
+            ['name' => 'calendar_view_local', 'module' => 'calendar', 'label' => 'View Local Calendar', 'description' => 'View local calendar events'],
+            ['name' => 'calendar_view_google', 'module' => 'calendar', 'label' => 'View Google Calendar', 'description' => 'View Google Calendar events'],
+            ['name' => 'calendar_sync_google', 'module' => 'calendar', 'label' => 'Sync Google Calendar', 'description' => 'Synchronize with Google Calendar'],
+
+            // Notes Module
+            ['name' => 'note_view_any', 'module' => 'notes', 'label' => 'View All Notes', 'description' => 'View all notes in workspace'],
+            ['name' => 'note_view', 'module' => 'notes', 'label' => 'View Note', 'description' => 'View individual note'],
+            ['name' => 'note_create', 'module' => 'notes', 'label' => 'Create Note', 'description' => 'Create new note'],
+            ['name' => 'note_update', 'module' => 'notes', 'label' => 'Update Note', 'description' => 'Modify note information'],
+            ['name' => 'note_delete', 'module' => 'notes', 'label' => 'Delete Note', 'description' => 'Remove note'],
+
+            //Seperate Calendar Module
+            ['name' => 'task_calendar_view', 'module' => 'task_calendar', 'label' => 'View Task Calendar', 'description' => 'Access task calendar view with tasks and meetings'],
+            ['name' => 'task_calendar_view_tasks', 'module' => 'task_calendar', 'label' => 'View Tasks in Calendar', 'description' => 'View task events in calendar'],
+            ['name' => 'task_calendar_view_meetings', 'module' => 'task_calendar', 'label' => 'View Meetings in Calendar', 'description' => 'View meeting events in calendar'],
+            ['name' => 'task_calendar_manage_events', 'module' => 'task_calendar', 'label' => 'Manage Calendar Events', 'description' => 'Create and manage calendar events'],
+
+            // Contract Types Module
+            ['name' => 'contract_type_view_any', 'module' => 'contract_types', 'label' => 'View All Contract Types', 'description' => 'View all contract types in workspace'],
+            ['name' => 'contract_type_view', 'module' => 'contract_types', 'label' => 'View Contract Type', 'description' => 'View individual contract type'],
+            ['name' => 'contract_type_create', 'module' => 'contract_types', 'label' => 'Create Contract Type', 'description' => 'Create new contract type'],
+            ['name' => 'contract_type_update', 'module' => 'contract_types', 'label' => 'Update Contract Type', 'description' => 'Modify contract type information'],
+            ['name' => 'contract_type_delete', 'module' => 'contract_types', 'label' => 'Delete Contract Type', 'description' => 'Remove contract type'],
+
+            // Contracts Module
+            ['name' => 'contract_view_any', 'module' => 'contracts', 'label' => 'View All Contracts', 'description' => 'View all contracts in workspace'],
+            ['name' => 'contract_view', 'module' => 'contracts', 'label' => 'View Contract', 'description' => 'View individual contract'],
+            ['name' => 'contract_create', 'module' => 'contracts', 'label' => 'Create Contract', 'description' => 'Create new contract'],
+            ['name' => 'contract_update', 'module' => 'contracts', 'label' => 'Update Contract', 'description' => 'Modify contract information'],
+            ['name' => 'contract_delete', 'module' => 'contracts', 'label' => 'Delete Contract', 'description' => 'Remove contract'],
+            ['name' => 'contract_duplicate', 'module' => 'contracts', 'label' => 'Duplicate Contract', 'description' => 'Create copy of existing contract'],
+            ['name' => 'contract_send_email', 'module' => 'contracts', 'label' => 'Send Contract Email', 'description' => 'Send contract via email'],
+            ['name' => 'contract_download', 'module' => 'contracts', 'label' => 'Download Contract', 'description' => 'Download contract as PDF'],
+            ['name' => 'contract_preview', 'module' => 'contracts', 'label' => 'Preview Contract', 'description' => 'Preview contract before sending'],
+            ['name' => 'contract_change_status', 'module' => 'contracts', 'label' => 'Change Contract Status', 'description' => 'Update contract status'],
+
+            // Contracts Signature Module
+            ['name' => 'contract_signature', 'module' => 'contracts_signature', 'label' => 'Add Contract Signature', 'description' => 'Add digital signature to contract'],
+
+            // Contract Notes Module
+            ['name' => 'contract_note_view_any', 'module' => 'contract_notes', 'label' => 'View All Contract Notes', 'description' => 'View all contract notes'],
+            ['name' => 'contract_note_view', 'module' => 'contract_notes', 'label' => 'View Contract Note', 'description' => 'View individual contract note'],
+            ['name' => 'contract_note_create', 'module' => 'contract_notes', 'label' => 'Create Contract Note', 'description' => 'Add notes to contract'],
+            ['name' => 'contract_note_update', 'module' => 'contract_notes', 'label' => 'Update Contract Note', 'description' => 'Modify contract notes'],
+            ['name' => 'contract_note_delete', 'module' => 'contract_notes', 'label' => 'Delete Contract Note', 'description' => 'Remove contract notes'],
+
+            // Contract Comments Module
+            ['name' => 'contract_comment_view_any', 'module' => 'contract_comments', 'label' => 'View All Contract Comments', 'description' => 'View all contract comments'],
+            ['name' => 'contract_comment_view', 'module' => 'contract_comments', 'label' => 'View Contract Comment', 'description' => 'View individual contract comment'],
+            ['name' => 'contract_comment_create', 'module' => 'contract_comments', 'label' => 'Create Contract Comment', 'description' => 'Add comments to contract'],
+            ['name' => 'contract_comment_update', 'module' => 'contract_comments', 'label' => 'Update Contract Comment', 'description' => 'Modify contract comments'],
+            ['name' => 'contract_comment_delete', 'module' => 'contract_comments', 'label' => 'Delete Contract Comment', 'description' => 'Remove contract comments'],
+
+            // Contract Attachments Module
+            ['name' => 'contract_attachment_view_any', 'module' => 'contract_attachments', 'label' => 'View All Contract Attachments', 'description' => 'View all contract attachments'],
+            ['name' => 'contract_attachment_view', 'module' => 'contract_attachments', 'label' => 'View Contract Attachment', 'description' => 'View individual contract attachment'],
+            ['name' => 'contract_attachment_create', 'module' => 'contract_attachments', 'label' => 'Create Contract Attachment', 'description' => 'Upload files to contract'],
+            ['name' => 'contract_attachment_update', 'module' => 'contract_attachments', 'label' => 'Update Contract Attachment', 'description' => 'Modify contract attachments'],
+            ['name' => 'contract_attachment_delete', 'module' => 'contract_attachments', 'label' => 'Delete Contract Attachment', 'description' => 'Remove contract attachments'],
+            ['name' => 'contract_attachment_download', 'module' => 'contract_attachments', 'label' => 'Download Contract Attachment', 'description' => 'Download contract files'],
+
+            // Project Report Module
+            ['name' => 'project_report_view_any', 'module' => 'project_report', 'label' => 'View All Project Reports', 'description' => 'View all project reports in workspace'],
+            ['name' => 'project_report_view', 'module' => 'project_report', 'label' => 'View Project Report', 'description' => 'View individual project report'],
+            ['name' => 'project_report_create', 'module' => 'project_report', 'label' => 'Create Project Report', 'description' => 'Generate project reports'],
+            ['name' => 'project_report_export', 'module' => 'project_report', 'label' => 'Export Project Report', 'description' => 'Export project reports to various formats'],
+            ['name' => 'project_report_dashboard', 'module' => 'project_report', 'label' => 'View Project Report Dashboard', 'description' => 'Access project report dashboard with analytics'],
+
+            // ToDo Module
+            ['name' => 'todo_view_any', 'module' => 'todos', 'label' => 'View All ToDos', 'description' => 'View all todos in workspace'],
+            ['name' => 'todo_view', 'module' => 'todos', 'label' => 'View ToDo', 'description' => 'View individual todo'],
+            ['name' => 'todo_create', 'module' => 'todos', 'label' => 'Create ToDo', 'description' => 'Create new todo'],
+            ['name' => 'todo_update', 'module' => 'todos', 'label' => 'Update ToDo', 'description' => 'Modify todo information'],
+            ['name' => 'todo_delete', 'module' => 'todos', 'label' => 'Delete ToDo', 'description' => 'Remove todo'],
+            ['name' => 'todo_status_update', 'module' => 'todos', 'label' => 'Update ToDo Status', 'description' => 'Change todo status'],
+            ['name' => 'todo_manage_members', 'module' => 'todos', 'label' => 'Manage ToDo Members', 'description' => 'Share todos with workspace members'],
+            ['name' => 'todo_comment_create', 'module' => 'todos', 'label' => 'Add ToDo Comments', 'description' => 'Add comments to todos'],
+            ['name' => 'todo_comment_update', 'module' => 'todos', 'label' => 'Update ToDo Comments', 'description' => 'Modify own todo comments'],
+            ['name' => 'todo_comment_delete', 'module' => 'todos', 'label' => 'Delete ToDo Comments', 'description' => 'Remove own todo comments'],
+            ['name' => 'todo_attachment_create', 'module' => 'todos', 'label' => 'Add ToDo Attachments', 'description' => 'Upload files to todos'],
+            ['name' => 'todo_attachment_delete', 'module' => 'todos', 'label' => 'Delete ToDo Attachments', 'description' => 'Remove todo attachments'],
+            ['name' => 'todo_attachment_download', 'module' => 'todos', 'label' => 'Download ToDo Attachments', 'description' => 'Download todo files']
+
         ];
 
         foreach ($permissions as $permission) {

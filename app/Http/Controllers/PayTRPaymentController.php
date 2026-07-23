@@ -319,4 +319,116 @@ class PayTRPaymentController extends Controller
             return redirect()->route('home')->with('error', __('Payment processing failed'));
         }
     }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_paytr_enabled']) || $settings['is_paytr_enabled'] !== '1') {
+                return response()->json(['error' => 'PayTR not enabled'], 400);
+            }
+
+            if (!isset($settings['paytr_merchant_id'])) {
+                return response()->json(['error' => 'PayTR not configured'], 400);
+            }
+
+            $credentials = $this->getPayTRCredentials($invoice->created_by);
+            $merchant_oid = 'invoice_' . $invoice->id . '_' . time() . '_' . uniqid();
+            $payment_amount = intval($request->amount * 100);
+            $user_basket = json_encode([[
+                'Invoice #' . $invoice->invoice_number . ' Payment',
+                number_format($request->amount, 2),
+                1
+            ]]);
+
+            $hashStr = $credentials['merchant_id'] . 
+                      $request->ip() .
+                      $merchant_oid .
+                      'customer@example.com' .
+                      $payment_amount .
+                      $user_basket .
+                      '1' . '0' . 'TRY' . '1' .
+                      $credentials['merchant_salt'];
+            
+            $paytr_token = base64_encode(hash_hmac('sha256', $hashStr, $credentials['merchant_key'], true));
+            
+            $post_data = [
+                'merchant_id' => $credentials['merchant_id'],
+                'user_ip' => $request->ip(),
+                'merchant_oid' => $merchant_oid,
+                'email' => 'customer@example.com',
+                'payment_amount' => $payment_amount,
+                'paytr_token' => $paytr_token,
+                'user_basket' => $user_basket,
+                'no_installment' => 1,
+                'max_installment' => 0,
+                'user_name' => 'Customer',
+                'user_address' => 'Turkey',
+                'user_phone' => '5555555555',
+                'merchant_ok_url' => route('paytr.invoice.success.link', [
+                    'token' => $token,
+                    'amount' => $request->amount
+                ]),
+                'merchant_fail_url' => route('invoices.payment', $token),
+                'timeout_limit' => 30,
+                'currency' => 'TRY',
+                'test_mode' => 1
+            ];
+            
+            $response = Http::asForm()->timeout(40)->post('https://www.paytr.com/odeme/api/get-token', $post_data);
+            
+            if ($response->successful()) {
+                $result = $response->json();
+                if ($result['status'] == 'success') {
+                    return response()->json([
+                        'success' => true,
+                        'redirect_url' => 'https://www.paytr.com/odeme/guvenli/' . $result['token']
+                    ]);
+                } else {
+                    return response()->json(['error' => $result['reason'] ?? 'Token generation failed'], 400);
+                }
+            }
+            
+            return response()->json(['error' => 'PayTR API connection failed'], 400);
+            
+        } catch (ValidationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Payment processing failed. Please try again.'], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $amount = $request->input('amount');
+            $merchantOid = $request->input('merchant_oid');
+            
+            if ($amount) {
+                $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+                
+                $invoice->createPaymentRecord(
+                    $amount,
+                    'paytr',
+                    $merchantOid ?: 'paytr_' . time()
+                );
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+            
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
+        }
+    }
 }

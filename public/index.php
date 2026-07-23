@@ -19,6 +19,9 @@ if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php'))
 // Register the Composer autoloader...
 require __DIR__.'/../vendor/autoload.php';
 
+// Load extra package autoloader (packages in vendor/ but not in git-committed autoload maps)
+require __DIR__.'/../bootstrap/autoload-packages.php';
+
 // Bootstrap Laravel and handle the request...
 /** @var Application $app */
 $app = require_once __DIR__.'/../bootstrap/app.php';

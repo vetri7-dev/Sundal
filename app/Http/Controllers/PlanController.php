@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Models\PlanOrder;
 
 class PlanController extends Controller
 {
@@ -274,7 +275,17 @@ class PlanController extends Controller
             ->pluck('plan_id')
             ->toArray();
         
-        $plans = $dbPlans->map(function ($plan) use ($billingCycle, $user, $pendingRequests) {
+            $latestOrder = \App\Models\PlanOrder::where('user_id', $user->id)
+                ->where('plan_id', $user->plan_id)
+                ->where('status', 'approved')
+                ->latest()
+                ->first();
+            $userPlanCycle = $latestOrder?->billing_cycle ?? 'monthly';
+            if ($user->is_trial) {
+                $userPlanCycle = 'monthly';
+            }
+
+        $plans = $dbPlans->map(function ($plan) use ($billingCycle, $user, $pendingRequests, $userPlanCycle) {
             $price = $billingCycle === 'yearly' ? $plan->yearly_price : $plan->price;
             
             $features = [];
@@ -298,8 +309,8 @@ class PlanController extends Controller
                     'projects_per_workspace' => $plan->max_projects_per_workspace,
                     'storage' => $plan->storage_limit . ' GB',
                 ],
-                'is_current' => $user->plan_id == $plan->id,
-                'is_trial_available' => $plan->is_trial === 'on' && $plan->trial_day > 0 && $user->is_trial == 0 && $user->trial_expire_date === null,
+                'is_current' => $user->plan_id == $plan->id && $userPlanCycle === $billingCycle,
+                'is_trial_available' => $plan->is_trial === 'on' && $plan->trial_day > 0 && $user->is_trial === null && $user->trial_expire_date === null,
                 'is_default' => $plan->is_default,
                 'has_pending_request' => in_array($plan->id, $pendingRequests),
                 'recommended' => false // Default to false

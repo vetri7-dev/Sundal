@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\ZoomSettingsController;
+use App\Http\Controllers\Settings\GoogleMeetSettingsController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -109,5 +110,17 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     // Zoom Settings routes
     Route::post('settings/zoom', [ZoomSettingsController::class, 'update'])->name('settings.zoom.update');
     Route::post('settings/zoom/test', [ZoomSettingsController::class, 'test'])->name('settings.zoom.test');
+
+    // Google Meet Settings routes
+    Route::post('settings/google-meet', [GoogleMeetSettingsController::class, 'update'])->name('settings.google-meet.update');
+    Route::get('/auth/googlemeet', [GoogleMeetSettingsController::class, 'redirectToGoogle'])->name('settings.google-meet.redirectToGoogle');
+    Route::get('/oauth', [GoogleMeetSettingsController::class, 'handleGoogleCallback'])->name('settings.google-meet.handleGoogleCallback');
+
+    // Google Calendar Settings routes
+    Route::post('settings/google-calendar/update', [SettingsController::class, 'updateGoogleCalendar'])->middleware('permission:settings_google_calendar')->name('settings.google-calendar.update');
+    Route::post('settings/google-calendar/sync', [SettingsController::class, 'syncGoogleCalendar'])->middleware('permission:settings_google_calendar')->name('settings.google-calendar.sync');
+
+    // Invoice settings
+    Route::post('settings/invoice', [SettingsController::class, 'storeInvoiceSettings'])->middleware('permission:settings_invoice')->name('settings.invoice.store');
 
 });

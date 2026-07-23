@@ -5,22 +5,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List, FileText, Clock, CalendarDays, FileUp, FileDown, Users, CheckCircle, AlertTriangle } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { CrudFormModal } from '@/components/CrudFormModal';
-import { EnhancedDeleteModal } from '@/components/EnhancedDeleteModal';
+import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { ImportModal } from '@/components/ImportModal';
 import { toast } from '@/components/custom-toast';
+import { CrudTable } from '@/components/CrudTable';
 import { hasPermission } from '@/utils/authorization';
 import { useTranslation } from 'react-i18next';
 
 export default function ProjectIndex() {
     const { t } = useTranslation();
-    const { auth, projects, members, clients, portfolios = [], filters: pageFilters = {}, errors, flash } = usePage().props as any;
+    const { auth, projects, members, clients, filters: pageFilters = {}, errors, flash } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    
+    const formatText = (text: string) => {
+        if (!text) return '';
+        return text.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+    };
     
 
     
@@ -44,54 +50,61 @@ export default function ProjectIndex() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState<any>(null);
     const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Handle flash messages
     useEffect(() => {
-        if (flash?.success) {
-            toast.success(flash.success);
-        }
-        if (flash?.error) {
-            toast.error(flash.error);
-        }
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
     }, [flash]);
+
+    const buildParams = (
+        overrides: Record<string, any> = {},
+        opts: { search?: string; status?: string; priority?: string; view?: string } = {}
+    ) => {
+        const search = opts.search !== undefined ? opts.search : searchTerm;
+        const status = opts.status !== undefined ? opts.status : selectedStatus;
+        const priority = opts.priority !== undefined ? opts.priority : selectedPriority;
+        const view = opts.view !== undefined ? opts.view : activeView;
+
+        const params: any = { page: 1, view };
+        if (search) params.search = search;
+        if (status !== 'all') params.status = status;
+        if (priority !== 'all') params.priority = priority;
+        if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+        if (pageFilters.sort_field) params.sort_field = pageFilters.sort_field;
+        if (pageFilters.sort_direction) params.sort_direction = pageFilters.sort_direction;
+        return { ...params, ...overrides };
+    };
+
+    const navigate = (params: any) =>
+        router.get(route('projects.index'), params, { preserveState: false, preserveScroll: false });
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        applyFilters();
+        navigate(buildParams({ page: 1 }));
     };
-    
-    const applyFilters = () => {
-        const params: any = { page: 1 };
-        
-        if (searchTerm) params.search = searchTerm;
-        if (selectedStatus !== 'all') params.status = selectedStatus;
-        if (selectedPriority !== 'all') params.priority = selectedPriority;
-        if (pageFilters.per_page) params.per_page = pageFilters.per_page;
-        params.view = activeView;
-        
-        router.get(route('projects.index'), params, { preserveState: false, preserveScroll: false });
+
+    const applyFilters = () => navigate(buildParams({ page: 1 }));
+
+    const handleSort = (field: string) => {
+        const direction = pageFilters.sort_field === field && pageFilters.sort_direction === 'asc' ? 'desc' : 'asc';
+        navigate(buildParams({ sort_field: field, sort_direction: direction, page: 1 }));
     };
-    
+
     const handleStatusFilter = (value: string) => {
         setSelectedStatus(value);
-        const params: any = { page: 1 };
-        if (searchTerm) params.search = searchTerm;
-        if (value !== 'all') params.status = value;
-        if (selectedPriority !== 'all') params.priority = selectedPriority;
-        if (pageFilters.per_page) params.per_page = pageFilters.per_page;
-        params.view = activeView;
-        router.get(route('projects.index'), params, { preserveState: false, preserveScroll: false });
+        navigate(buildParams({ page: 1 }, { status: value }));
     };
-    
+
     const handlePriorityFilter = (value: string) => {
         setSelectedPriority(value);
-        const params: any = { page: 1 };
-        if (searchTerm) params.search = searchTerm;
-        if (selectedStatus !== 'all') params.status = selectedStatus;
-        if (value !== 'all') params.priority = value;
-        if (pageFilters.per_page) params.per_page = pageFilters.per_page;
-        params.view = activeView;
-        router.get(route('projects.index'), params, { preserveState: false, preserveScroll: false });
+        navigate(buildParams({ page: 1 }, { priority: value }));
+    };
+
+    const handleViewChange = (view: string) => {
+        setActiveView(view);
+        navigate(buildParams({ page: 1 }, { view }));
     };
     
     const handleAction = (action: string, item: any) => {
@@ -117,10 +130,12 @@ export default function ProjectIndex() {
     };
     
     const handleFormSubmit = (formData: any) => {
+        
         if (formMode === 'create') {
             toast.loading('Creating project...');
             router.post(route('projects.store'), formData, {
                 onSuccess: () => {
+                    console.log('SUCCESS');
                     setIsFormModalOpen(false);
                     toast.dismiss();
                     if (flash?.success) {
@@ -128,6 +143,7 @@ export default function ProjectIndex() {
                     }
                 },
                 onError: (errors) => {
+                    console.log('ERROR:', errors);
                     toast.dismiss();
                     if (errors?.error) {
                         toast.error(errors.error);
@@ -137,6 +153,15 @@ export default function ProjectIndex() {
                             toast.error(errorMessages[0] as string);
                         }
                     }
+                },
+                onBefore: () => {
+                    console.log('BEFORE REQUEST');
+                },
+                onStart: () => {
+                    console.log('START REQUEST');
+                },
+                onFinish: () => {
+                    console.log('FINISH REQUEST');
                 }
             });
         } else if (formMode === 'edit') {
@@ -196,31 +221,78 @@ export default function ProjectIndex() {
         setSelectedPriority('all');
         setSearchTerm('');
         setShowFilters(false);
-        router.get(route('projects.index'), { page: 1, per_page: pageFilters.per_page, view: activeView }, { preserveState: false, preserveScroll: false });
+        const params: any = { page: 1, view: activeView };
+        if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+        navigate(params);
     };
 
     const getStatusColor = (status: string) => {
         const colors = {
-            planning: 'bg-blue-100 text-blue-800',
-            active: 'bg-green-100 text-green-800',
-            on_hold: 'bg-yellow-100 text-yellow-800',
-            completed: 'bg-gray-100 text-gray-800',
-            cancelled: 'bg-red-100 text-red-800'
+            planning: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
+            active: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
+            on_hold: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
+            completed: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20',
+            cancelled: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
         };
-        return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+        return colors[status as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
     };
 
     const getPriorityColor = (priority: string) => {
         const colors = {
-            low: 'bg-green-100 text-green-800',
-            medium: 'bg-yellow-100 text-yellow-800',
-            high: 'bg-orange-100 text-orange-800',
-            urgent: 'bg-red-100 text-red-800'
+            low: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
+            medium: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
+            high: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
+            urgent: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
         };
-        return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+        return colors[priority as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
     };
 
     const pageActions = [];
+    
+    // Get user workspace role from props
+    const userWorkspaceRole = (usePage().props as any).userWorkspaceRole;
+    
+    // Export - only for users with view permission and not clients
+    if (hasPermission(permissions, 'project_view_any') && userWorkspaceRole !== 'client') {
+        pageActions.push({
+            label: t('Export'),
+            icon: <FileDown className="h-4 w-4 mr-2" />,
+            variant: 'outline',
+            onClick: async () => {
+                try {
+                    const params = new URLSearchParams();
+                    if (searchTerm) params.append('search', searchTerm);
+                    if (selectedStatus !== 'all') params.append('status', selectedStatus);
+                    if (selectedPriority !== 'all') params.append('priority', selectedPriority);
+                    
+                    const response = await fetch(route('projects.export', params));
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `projects_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success(t('Export completed successfully'));
+                } catch (error) {
+                    toast.error(t('Export failed'));
+                }
+            }
+        });
+    }
+    
+    // Import - only for users with create permission and not clients
+    if (hasPermission(permissions, 'project_create') && userWorkspaceRole !== 'client') {
+        pageActions.push({
+            label: t('Import'),
+            icon: <FileUp className="h-4 w-4 mr-2" />,
+            variant: 'outline',
+            onClick: () => setIsImportModalOpen(true)
+        });
+    }
     
     if (hasPermission(permissions, 'project_create')) {
         pageActions.push({
@@ -235,55 +307,198 @@ export default function ProjectIndex() {
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Projects') }
     ];
+
+    // CrudTable configuration
+    const columns = [
+        {
+            key: 'title',
+            label: t('Project'),
+            sortable: true,
+            render: (value: string, row: any) => (
+                <div>
+                    <div 
+                        className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => router.get(route('projects.show', row.id))}
+                    >
+                        {value}
+                    </div>
+                    <div className="text-sm text-gray-500 truncate max-w-xs">{row.description}</div>
+                </div>
+            )
+        },
+        {
+            key: 'status',
+            label: t('Status'),
+            render: (value: string, row: any) => (
+                <div className="flex gap-1">
+                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(value)}`}>
+                        {formatText(value)}
+                    </span>
+                    {row.is_public ? (
+                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
+                            {t('Public')}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20">
+                            {t('Private')}
+                        </span>
+                    )}
+                </div>
+            )
+        },
+        {
+            key: 'priority',
+            label: t('Priority'),
+            sortable: true,
+            render: (value: string) => (
+                <span className={`inline-flex items-center capitalize rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(value)}`}>
+                    {value}
+                </span>
+            )
+        },
+        {
+            key: 'progress',
+            label: t('Progress'),
+            render: (value: number) => (
+                <div className="flex items-center">
+                    <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{width: `${value}%`}}></div>
+                    </div>
+                    <span className="text-sm text-gray-900">{value}%</span>
+                </div>
+            )
+        },
+        {
+            key: 'members',
+            label: t('Team'),
+            render: (value: any[]) => (
+                <div className="flex -space-x-1">
+                    {value?.slice(0, 3).map((member: any, index: number) => (
+                        <Tooltip key={index}>
+                            <TooltipTrigger asChild>
+                                <Avatar className="h-6 w-6 border-2 border-white cursor-pointer">
+                                    <AvatarImage src={member.user?.avatar} />
+                                    <AvatarFallback className="text-xs">
+                                        {member.user?.name?.charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {member.user?.name}
+                            </TooltipContent>
+                        </Tooltip>
+                    ))}
+                    {value?.length > 3 && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs cursor-pointer">
+                                    +{value.length - 3}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {value.slice(3).map((m: any) => m.user?.name).join(', ')}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            )
+        },
+        {
+            key: 'deadline',
+            label: t('Deadline'),
+            sortable: true,
+            render: (value: string) => window.appSettings.formatDateTime(new Date(value),false)
+        }
+    ];
+
+    const actions = [
+        {
+            label: t('View'),
+            icon: 'Eye',
+            action: 'view',
+            className: 'text-blue-500 hover:text-blue-700',
+            condition: () => hasPermission(permissions, 'project_view')
+        },
+        {
+            label: t('Edit'),
+            icon: 'Edit',
+            action: 'edit',
+            className: 'text-amber-500 hover:text-amber-700',
+            condition: () => hasPermission(permissions, 'project_update')
+        },
+        {
+            label: t('Delete'),
+            icon: 'Trash2',
+            action: 'delete',
+            className: 'text-red-500 hover:text-red-700',
+            condition: () => hasPermission(permissions, 'project_delete')
+        }
+    ];
     
     return (
         <PageTemplate 
-            title={t('Projects Management')} 
+            title={t('Projects')} 
             url="/projects"
             actions={pageActions}
             breadcrumbs={breadcrumbs}
             noPadding
         >
             {/* Overview Row */}
-            <Card className="mb-4 hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                    <div className="grid grid-cols-5 gap-4">
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-blue-600">
-                                {projects?.total || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('Total Projects')}</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-green-600">
-                                {projects?.data?.filter((project: any) => project.status === 'active').length || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('Active')}</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-blue-600">
-                                {projects?.data?.filter((project: any) => project.status === 'completed').length || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('Completed')}</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-yellow-600">
-                                {projects?.data?.filter((project: any) => project.status === 'on_hold').length || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('On Hold')}</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-xl font-bold text-orange-600">
-                                {projects?.data?.filter((project: any) => project.priority === 'high' || project.priority === 'urgent').length || 0}
-                            </div>
-                            <div className="text-xs text-gray-600">{t('High Priority')}</div>
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
+                    <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
+                        <FileText className="h-5 w-5 text-blue-600 dark:text-blue-100" />
                     </div>
-                </CardContent>
-            </Card>
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Total Projects')}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.total || 0}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('All Projects')}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
+                    <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0">
+                        <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-100" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Active')}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'active').length || 0}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('In Progress')}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
+                    <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center shrink-0">
+                        <CheckCircle className="h-5 w-5 text-violet-600 dark:text-violet-100" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Completed')}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'completed').length || 0}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Done')}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
+                    <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
+                        <Clock className="h-5 w-5 text-amber-600 dark:text-amber-100" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('On Hold')}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'on_hold').length || 0}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Paused')}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
+                    <div className="h-10 w-10 rounded-lg bg-red-100 dark:bg-red-900 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-100" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('High Priority')}</p>
+                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.priority === 'high' || p.priority === 'urgent').length || 0}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Urgent & High')}</p>
+                    </div>
+                </div>
+            </div>
 
             {/* Search and filters section */}
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="bg-white rounded-lg border shadow mb-4">
                 <div className="p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -327,7 +542,7 @@ export default function ProjectIndex() {
                                     size="sm" 
                                     variant={activeView === 'list' ? "default" : "ghost"}
                                     className="h-7 px-2"
-                                    onClick={() => setActiveView('list')}
+                                    onClick={() => handleViewChange('list')}
                                 >
                                     <List className="h-4 w-4" />
                                 </Button>
@@ -335,7 +550,7 @@ export default function ProjectIndex() {
                                     size="sm" 
                                     variant={activeView === 'grid' ? "default" : "ghost"}
                                     className="h-7 px-2"
-                                    onClick={() => setActiveView('grid')}
+                                    onClick={() => handleViewChange('grid')}
                                 >
                                     <LayoutGrid className="h-4 w-4" />
                                 </Button>
@@ -344,13 +559,7 @@ export default function ProjectIndex() {
                             <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
                             <Select 
                                 value={pageFilters.per_page?.toString() || "12"} 
-                                onValueChange={(value) => {
-                                    const params: any = { page: 1, per_page: parseInt(value) };
-                                    if (searchTerm) params.search = searchTerm;
-                                    if (selectedStatus !== 'all') params.status = selectedStatus;
-                                    if (selectedPriority !== 'all') params.priority = selectedPriority;
-                                    router.get(route('projects.index'), params, { preserveState: false, preserveScroll: false });
-                                }}
+                                onValueChange={(value) => navigate(buildParams({ page: 1, per_page: parseInt(value) }))}
                             >
                                 <SelectTrigger className="w-16 h-8">
                                     <SelectValue />
@@ -359,6 +568,7 @@ export default function ProjectIndex() {
                                     <SelectItem value="12">12</SelectItem>
                                     <SelectItem value="24">24</SelectItem>
                                     <SelectItem value="48">48</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -375,11 +585,11 @@ export default function ProjectIndex() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t('All Status')}</SelectItem>
-                                            <SelectItem value="planning">Planning</SelectItem>
-                                            <SelectItem value="active">Active</SelectItem>
-                                            <SelectItem value="on_hold">On Hold</SelectItem>
-                                            <SelectItem value="completed">Completed</SelectItem>
-                                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                                            <SelectItem value="planning">{t('Planning')}</SelectItem>
+                                            <SelectItem value="active">{t('Active')}</SelectItem>
+                                            <SelectItem value="on_hold">{t('On Hold')}</SelectItem>
+                                            <SelectItem value="completed">{t('Completed')}</SelectItem>
+                                            <SelectItem value="cancelled">{t('Cancelled')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -392,10 +602,10 @@ export default function ProjectIndex() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t('All Priority')}</SelectItem>
-                                            <SelectItem value="low">Low</SelectItem>
-                                            <SelectItem value="medium">Medium</SelectItem>
-                                            <SelectItem value="high">High</SelectItem>
-                                            <SelectItem value="urgent">Urgent</SelectItem>
+                                            <SelectItem value="low">{t('Low')}</SelectItem>
+                                            <SelectItem value="medium">{t('Medium')}</SelectItem>
+                                            <SelectItem value="high">{t('High')}</SelectItem>
+                                            <SelectItem value="urgent">{t('Urgent')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -417,55 +627,73 @@ export default function ProjectIndex() {
 
             {/* Projects Content */}
             {(activeView === 'grid' || !activeView) ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
                 {projects?.data?.map((project: any) => (
                     <Card key={project.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
+                        <CardHeader className="p-3 pb-2">
+                            <div className="flex justify-between items-start gap-2">
                                 <CardTitle 
-                                    className="text-base line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
+                                    className="text-sm font-semibold line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
                                     onClick={() => router.get(route('projects.show', project.id))}
                                 >
                                     {project.title}
                                 </CardTitle>
-                                <div className="flex gap-1">
-                                    <Badge className={getStatusColor(project.status)} variant="secondary">
-                                        {project.status.replace('_', ' ')}
-                                    </Badge>
+                                <div className="flex gap-1 shrink-0">
+                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
+                                        {formatText(project.status)}
+                                    </span>
                                     {project.is_public ? (
-                                        <Badge variant="outline" className="text-green-600 border-green-600">
-                                            Public
-                                        </Badge>
+                                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
+                                            {t('Public')}
+                                        </span>
                                     ) : (
-                                        <Badge variant="outline" className="text-gray-600 border-gray-600">
-                                            Private
-                                        </Badge>
+                                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20">
+                                            {t('Private')}
+                                        </span>
                                     )}
                                 </div>
                             </div>
-                            <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
+                            {project.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{project.description}</p>
+                            )}
                         </CardHeader>
                         
-                        <CardContent className="py-2">
-                            <div className="space-y-3">
+                        <CardContent className="p-3 pt-0">
+                            <div className="space-y-2">
                                 <div className="space-y-1">
                                     <div className="flex justify-between text-xs">
-                                        <span>{t('Progress')}</span>
-                                        <span>{project.progress}%</span>
+                                        <span className="text-muted-foreground">{t('Progress')}</span>
+                                        <span className="font-medium">{project.progress}%</span>
                                     </div>
                                     <Progress value={project.progress} className="h-1" />
                                 </div>
                                 
                                 <div className="flex justify-between items-center text-xs">
-                                    <Badge className={getPriorityColor(project.priority)} variant="outline">
+                                    {project.start_date ? (
+                                        <div className="flex items-center gap-1 text-muted-foreground">
+                                            <CalendarDays className="h-3 w-3" />
+                                            <span>{window.appSettings.formatDateTime(new Date(project.start_date),false)}</span>
+                                        </div>
+                                    ) : <span />}
+                                    <div className="flex items-center gap-1 text-muted-foreground">
+                                            <CalendarDays className="h-3 w-3" />
+                                            <span>{window.appSettings.formatDateTime(new Date(project.deadline),false)}</span>
+                                        </div>
+                                </div>
+
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span className={`inline-flex items-center capitalize rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(project.priority)}`}>
                                         {project.priority}
-                                    </Badge>
-                                    <span className="text-muted-foreground">
-                                        {new Date(project.deadline).toLocaleDateString()}
                                     </span>
+                                    {project.estimated_hours ? (
+                                        <div className="flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            <span>{project.estimated_hours}h</span>
+                                        </div>
+                                    ) : <span />}
                                 </div>
                                 
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between pt-1 border-t">
                                     <div className="flex -space-x-1">
                                         {project.members?.slice(0, 3).map((member: any, index: number) => (
                                             <Tooltip key={index}>
@@ -496,217 +724,102 @@ export default function ProjectIndex() {
                                         )}
                                     </div>
                                     
-                                    {project.clients?.length > 0 && (
-                                        <div className="text-xs text-muted-foreground">
-                                            {project.clients.length} client{project.clients.length > 1 ? 's' : ''}
-                                        </div>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {project.clients?.length > 0 && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {project.clients.length} client{project.clients.length > 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                        {hasPermission(permissions, 'project_view') && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('view', project)} className="text-blue-500 hover:text-blue-700 h-7 w-7">
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('View')}</TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {hasPermission(permissions, 'project_update') && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('edit', project)} className="text-amber-500 hover:text-amber-700 h-7 w-7">
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('Edit')}</TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {hasPermission(permissions, 'project_delete') && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('delete', project)} className="text-red-500 hover:text-red-700 h-7 w-7">
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('Delete')}</TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
                         
-                        <CardFooter className="flex justify-end gap-1 pt-0 pb-2">
-                            {hasPermission(permissions, 'project_view') && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            onClick={() => handleAction('view', project)}
-                                            className="text-blue-500 hover:text-blue-700 h-8 w-8"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>View</TooltipContent>
-                                </Tooltip>
-                            )}
-                            {hasPermission(permissions, 'project_update') && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            onClick={() => handleAction('edit', project)}
-                                            className="text-amber-500 hover:text-amber-700 h-8 w-8"
-                                        >
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Edit</TooltipContent>
-                                </Tooltip>
-                            )}
-                            {hasPermission(permissions, 'project_delete') && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon"
-                                            className="text-red-500 hover:text-red-700 h-8 w-8"
-                                            onClick={() => handleAction('delete', project)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Delete</TooltipContent>
-                                </Tooltip>
-                            )}
-                        </CardFooter>
+
                     </Card>
                 ))}
                 </div>
             ) : (
                 <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Project')}</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deadline</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {projects?.data?.map((project: any) => (
-                                    <tr key={project.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div>
-                                                <div 
-                                                    className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
-                                                    onClick={() => router.get(route('projects.show', project.id))}
-                                                >
-                                                    {project.title}
-                                                </div>
-                                                <div className="text-sm text-gray-500 truncate max-w-xs">{project.description}</div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex gap-1">
-                                                <Badge className={getStatusColor(project.status)} variant="secondary">
-                                                    {project.status.replace('_', ' ')}
-                                                </Badge>
-                                                {project.is_public ? (
-                                                    <Badge variant="outline" className="text-green-600 border-green-600">
-                                                        Public
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="outline" className="text-gray-600 border-gray-600">
-                                                        Private
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge className={getPriorityColor(project.priority)} variant="outline">
-                                                {project.priority}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                                                    <div className="bg-blue-600 h-2 rounded-full" style={{width: `${project.progress}%`}}></div>
-                                                </div>
-                                                <span className="text-sm text-gray-900">{project.progress}%</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex -space-x-1">
-                                                {project.members?.slice(0, 3).map((member: any, index: number) => (
-                                                    <Tooltip key={index}>
-                                                        <TooltipTrigger asChild>
-                                                            <Avatar className="h-6 w-6 border-2 border-white cursor-pointer">
-                                                                <AvatarImage src={member.user?.avatar} />
-                                                                <AvatarFallback className="text-xs">
-                                                                    {member.user?.name?.charAt(0)}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            {member.user?.name}
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                ))}
-                                                {project.members?.length > 3 && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs cursor-pointer">
-                                                                +{project.members.length - 3}
-                                                            </div>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            {project.members.slice(3).map((m: any) => m.user?.name).join(', ')}
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {new Date(project.deadline).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex gap-1">
-                                                {hasPermission(permissions, 'project_view') && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                onClick={() => handleAction('view', project)}
-                                                                className="text-blue-500 hover:text-blue-700 h-8 w-8"
-                                                            >
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>View</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                {hasPermission(permissions, 'project_update') && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                onClick={() => handleAction('edit', project)}
-                                                                className="text-amber-500 hover:text-amber-700 h-8 w-8"
-                                                            >
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Edit</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                {hasPermission(permissions, 'project_delete') && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon"
-                                                                className="text-red-500 hover:text-red-700 h-8 w-8"
-                                                                onClick={() => handleAction('delete', project)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Delete</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <CrudTable
+                        columns={columns}
+                        actions={actions}
+                        data={projects?.data || []}
+                        from={projects?.from || 1}
+                        onAction={handleAction}
+                        sortField={pageFilters.sort_field}
+                        sortDirection={pageFilters.sort_direction}
+                        onSort={handleSort}
+                        permissions={permissions}
+                    />
+                    {/* Pagination */}
+                        {projects?.links && (
+                    <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
+                                <div className="text-sm text-muted-foreground">
+                                    {t('Showing')} <span className="font-medium">{projects?.from || 0}</span> {t('to')} <span className="font-medium">{projects?.to || 0}</span> {t('of')} <span className="font-medium">{projects?.total || 0}</span> {t('projects')}
+                                </div>
+                                
+                                <div className="flex gap-1">
+                                    {projects?.links?.map((link: any, i: number) => {
+                                        const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
+                                        const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
+                                        
+                                        return (
+                                            <Button
+                                                key={i}
+                                                variant={link.active ? 'default' : 'outline'}
+                                                size={isTextLink ? "sm" : "icon"}
+                                                className={isTextLink ? "px-3" : "h-8 w-8"}
+                                                disabled={!link.url}
+                                                onClick={() => {
+                                                    if (!link.url) return;
+                                                    const pageNum = new URL(link.url).searchParams.get('page');
+                                                    navigate(buildParams({ page: pageNum ? parseInt(pageNum) : 1 }));
+                                                }}
+                                            >
+                                                {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                 </div>
             )}
             
             {/* Pagination */}
-            {projects?.links && (
-                <div className="mt-6 bg-white p-4 rounded-lg shadow flex items-center justify-between">
+            {activeView === 'grid' && projects?.links && (
+                <div className="mt-6 bg-[#F0F0F1] dark:bg-gray-800 p-4 rounded-lg shadow flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
                         {t('Showing')} <span className="font-medium">{projects?.from || 0}</span> {t('to')} <span className="font-medium">{projects?.to || 0}</span> {t('of')} <span className="font-medium">{projects?.total || 0}</span> {t('projects')}
                     </div>
@@ -723,7 +836,11 @@ export default function ProjectIndex() {
                                     size={isTextLink ? "sm" : "icon"}
                                     className={isTextLink ? "px-3" : "h-8 w-8"}
                                     disabled={!link.url}
-                                    onClick={() => link.url && router.get(link.url)}
+                                    onClick={() => {
+                                        if (!link.url) return;
+                                        const pageNum = new URL(link.url).searchParams.get('page');
+                                        navigate(buildParams({ page: pageNum ? parseInt(pageNum) : 1 }));
+                                    }}
                                 >
                                     {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                                 </Button>
@@ -738,19 +855,11 @@ export default function ProjectIndex() {
                 isOpen={isFormModalOpen}
                 onClose={() => setIsFormModalOpen(false)}
                 onSubmit={handleFormSubmit}
+                submitButtonText={formMode === 'create' ? t('Create') : t('Update')}
                 formConfig={{
                     fields: [
-                        { name: 'title', label: t('Project Title'), type: 'text', required: true },
-                        { name: 'description', label: t('Description'), type: 'textarea' },
-                        {
-                            name: 'portfolio_id',
-                            label: t('Portfolio'),
-                            type: 'select',
-                            options: [
-                                { value: '', label: t('No Portfolio') },
-                                ...portfolios.map((p: any) => ({ value: String(p.id), label: p.name }))
-                            ]
-                        },
+                        { name: 'title', label: t('Project Title'), type: 'text', required: true, placeholder: t('Enter project title') },
+                        { name: 'description', label: t('Description'), type: 'textarea', placeholder: t('Enter project description') },
                         { 
                             name: 'status', 
                             label: t('Status'), 
@@ -776,10 +885,10 @@ export default function ProjectIndex() {
                             ],
                             required: true
                         },
-                        { name: 'start_date', label: t('Start Date'), type: 'date' },
-                        { name: 'deadline', label: t('Deadline'), type: 'date' },
-                        { name: 'estimated_hours', label: t('Estimated Hours'), type: 'number', min: 0 },
-                        { name: 'is_public', label: t('Make project public'), type: 'checkbox' }
+                        { name: 'start_date', label: t('Start Date'), type: 'date', required: true },
+                        { name: 'deadline', label: t('Deadline'), type: 'date', required: true },
+                        { name: 'estimated_hours', label: t('Estimated Hours'), type: 'number', min: 0, placeholder: t('e.g. 40') },
+                        { name: 'is_public', label: '', type: 'checkbox', placeholder: t('Make project public') }
                     ],
                     modalSize: 'xl'
                 }}
@@ -790,7 +899,7 @@ export default function ProjectIndex() {
                 }}
                 title={
                     formMode === 'create' 
-                        ? t('Add New Project') 
+                        ? t('Add Project') 
                         : formMode === 'edit' 
                             ? t('Edit Project') 
                             : t('View Project')
@@ -799,7 +908,7 @@ export default function ProjectIndex() {
             />
 
             {/* Delete Modal */}
-            <EnhancedDeleteModal
+            <CrudDeleteModal
                 isOpen={isDeleteModalOpen}
                 onClose={() => setIsDeleteModalOpen(false)}
                 onConfirm={handleDeleteConfirm}
@@ -813,6 +922,14 @@ export default function ProjectIndex() {
                     t('Project comments and notes'),
                     t('Budget and expense data')
                 ]}
+            />
+            
+            {/* Import Modal */}
+            <ImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                type="projects"
+                title={t('Projects')}
             />
         </PageTemplate>
     );

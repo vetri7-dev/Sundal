@@ -8,8 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { X, Plus } from 'lucide-react';
 import { ZoomMeeting, Project, User } from '@/types';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
     isOpen: boolean;
@@ -17,9 +19,12 @@ interface Props {
     meeting?: ZoomMeeting;
     projects: Project[];
     members: User[];
+    googleCalendarEnabled?: boolean;
 }
 
-export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, members }: Props) {
+export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, members, googleCalendarEnabled = false }: Props) {
+    const { t } = useTranslation();
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -28,9 +33,11 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         project_id: '',
         password: '',
-        member_ids: [] as string[]
+        status: 'scheduled',
+        member_ids: [] as string[],
+        is_googlecalendar_sync: false
     });
-    
+
     const [projectMembers, setProjectMembers] = useState<User[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +53,9 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                     timezone: meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
                     project_id: meeting.project_id?.toString() || 'none',
                     password: meeting.password || '',
-                    member_ids: meeting.members?.map(m => m.id.toString()) || []
+                    status: meeting.status || 'scheduled',
+                    member_ids: meeting.members?.map(m => m.id.toString()) || [],
+                    is_googlecalendar_sync: meeting.is_googlecalendar_sync || false
                 });
                 if (meeting.project_id) {
                     loadProjectMembers(meeting.project_id.toString());
@@ -60,7 +69,9 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     project_id: 'none',
                     password: '',
-                    member_ids: []
+                    status: 'scheduled',
+                    member_ids: [],
+                    is_googlecalendar_sync: false
                 });
                 setProjectMembers([]);
             }
@@ -74,7 +85,7 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
             setProjectMembers([]);
             return;
         }
-        
+
         try {
             const response = await fetch(route('api.projects.members', projectId));
             if (response.ok) {
@@ -112,22 +123,43 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (isSubmitting) return;
-        
+
+        // Client-side validation
         const newErrors: Record<string, string> = {};
-        if (!formData.title) newErrors.title = 'Title is required';
-        if (!formData.start_time) newErrors.start_time = 'Start time is required';
-        
+
+        if (!formData.title.trim()) {
+            newErrors.title = t('The title field is required.');
+        }
+
+        if (!formData.start_time) {
+            newErrors.start_time = t('The start time field is required.');
+        }
+
+        if (!formData.project_id || formData.project_id === 'none') {
+            newErrors.project_id = t('The project field is required.');
+        }
+
+        if (formData.project_id && formData.project_id !== 'none' && formData.member_ids.length === 0) {
+            newErrors.member_ids = t('Please select at least one member.');
+        }
+
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
         }
 
         setIsSubmitting(true);
+        setErrors({});
+
+        const submitData = {
+            ...formData,
+            project_id: formData.project_id === 'none' ? '' : formData.project_id
+        };
 
         if (meeting) {
-            router.put(route('zoom-meetings.update', meeting.id), formData, {
+            router.put(route('zoom-meetings.update', meeting.id), submitData, {
                 onSuccess: () => {
                     setIsSubmitting(false);
                     onClose();
@@ -138,7 +170,7 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                 }
             });
         } else {
-            router.post(route('zoom-meetings.store'), formData, {
+            router.post(route('zoom-meetings.store'), submitData, {
                 onSuccess: () => {
                     setIsSubmitting(false);
                     onClose();
@@ -156,49 +188,50 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>
-                        {meeting ? 'Edit Zoom Meeting' : 'Create Zoom Meeting'}
+                        {meeting ? t('Edit Zoom Meeting') : t('Create Zoom Meeting')}
                     </DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <Label htmlFor="title">Meeting Title *</Label>
+                        <Label htmlFor="title">{t('Meeting Title')} <span className="text-red-500">*</span></Label>
                         <Input
                             id="title"
                             value={formData.title}
                             onChange={(e) => handleChange('title', e.target.value)}
-                            placeholder="Enter meeting title"
-                            required
+                            placeholder={t('Enter meeting title')}
+
+                            className={errors.title ? 'border-red-500' : ''}
                         />
                         {errors.title && <p className="text-sm text-red-600">{errors.title}</p>}
                     </div>
 
                     <div>
-                        <Label htmlFor="description">Description</Label>
+                        <Label htmlFor="description">{t('Description')}</Label>
                         <Textarea
                             id="description"
                             value={formData.description}
                             onChange={(e) => handleChange('description', e.target.value)}
-                            placeholder="Meeting agenda or description"
+                            placeholder={t('Meeting agenda or description')}
                             rows={3}
                         />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="start_time">Start Date & Time *</Label>
+                            <Label htmlFor="start_time">{t('Start Date & Time')} <span className="text-red-500">*</span></Label>
                             <Input
                                 id="start_time"
                                 type="datetime-local"
                                 value={formData.start_time}
                                 onChange={(e) => handleChange('start_time', e.target.value)}
-                                required
+                                className={errors.start_time ? 'border-red-500' : ''}
                             />
                             {errors.start_time && <p className="text-sm text-red-600">{errors.start_time}</p>}
                         </div>
 
                         <div>
-                            <Label htmlFor="duration">Duration (minutes) *</Label>
+                            <Label htmlFor="duration">{t('Duration (minutes)')} <span className="text-red-500">*</span></Label>
                             <Input
                                 id="duration"
                                 type="number"
@@ -206,21 +239,39 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                                 max="480"
                                 value={formData.duration}
                                 onChange={(e) => handleChange('duration', parseInt(e.target.value) || 60)}
-                                placeholder="Enter duration in minutes"
-                                required
+                                placeholder={t('Enter duration in minutes')}
+                                className={errors.duration ? 'border-red-500' : ''}
                             />
+                            {errors.duration && <p className="text-sm text-red-600">{errors.duration}</p>}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {meeting && (
                         <div>
-                            <Label htmlFor="project_id">Project</Label>
-                            <Select value={formData.project_id || 'none'} onValueChange={handleProjectChange}>
+                            <Label htmlFor="status">{t('Status')}</Label>
+                            <Select value={formData.status} onValueChange={(value) => handleChange('status', value)}>
                                 <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select project (optional)" />
+                                    <SelectValue placeholder={t('Select status')} />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border shadow-lg z-[9999]">
-                                    <SelectItem value="none" className="bg-white hover:bg-gray-100">No project</SelectItem>
+                                    <SelectItem value="scheduled" className="bg-white hover:bg-gray-100">{t('Scheduled')}</SelectItem>
+                                    <SelectItem value="started" className="bg-white hover:bg-gray-100">{t('Started')}</SelectItem>
+                                    <SelectItem value="ended" className="bg-white hover:bg-gray-100">{t('Ended')}</SelectItem>
+                                    <SelectItem value="cancelled" className="bg-white hover:bg-gray-100">{t('Cancelled')}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <Label htmlFor="project_id">{t('Project')} <span className="text-red-500">*</span></Label>
+                            <Select value={formData.project_id || 'none'} onValueChange={handleProjectChange}>
+                                <SelectTrigger className={`bg-white ${errors.project_id ? 'border-red-500' : ''}`}>
+                                    <SelectValue placeholder={t('Select project')} />
+                                </SelectTrigger>
+                                <SelectContent searchable className="bg-white border shadow-lg z-[9999]">
+                                    <SelectItem value="none" className="bg-white hover:bg-gray-100">{t('Select project')}</SelectItem>
                                     {projects.map((project) => (
                                         <SelectItem key={project.id} value={project.id.toString()} className="bg-white hover:bg-gray-100">
                                             {project.title}
@@ -228,39 +279,40 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.project_id && <p className="text-sm text-red-600">{errors.project_id}</p>}
                         </div>
 
                         <div>
-                            <Label htmlFor="password">Password</Label>
+                            <Label htmlFor="password">{t('Password')}</Label>
                             <Input
                                 id="password"
                                 type="password"
                                 value={formData.password}
                                 onChange={(e) => handleChange('password', e.target.value)}
-                                placeholder="Enter meeting password (optional)"
+                                placeholder={t('Enter meeting password (optional)')}
                             />
                         </div>
                     </div>
 
                     {formData.project_id && formData.project_id !== 'none' && (
                         <div>
-                            <Label htmlFor="member_ids">Members</Label>
-                            <Select 
-                                value="" 
+                            <Label htmlFor="member_ids">{t('Members')} <span className="text-red-500">*</span></Label>
+                            <Select
+                                value=""
                                 onValueChange={(value) => {
                                     if (value && !formData.member_ids.includes(value)) {
                                         handleChange('member_ids', [...formData.member_ids, value]);
                                     }
                                 }}
                             >
-                                <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select members..." />
+                                <SelectTrigger className={`bg-white ${errors.member_ids ? 'border-red-500' : ''}`}>
+                                    <SelectValue placeholder={t('Select members...')} />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border shadow-lg z-[9999]">
+                                <SelectContent searchable className="bg-white border shadow-lg z-[9999]">
                                     {projectMembers.map((member) => (
-                                        <SelectItem 
-                                            key={member.id} 
-                                            value={member.id.toString()} 
+                                        <SelectItem
+                                            key={member.id}
+                                            value={member.id.toString()}
                                             className="bg-white hover:bg-gray-100"
                                             disabled={formData.member_ids.includes(member.id.toString())}
                                         >
@@ -269,7 +321,8 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                                     ))}
                                 </SelectContent>
                             </Select>
-                            
+                            {errors.member_ids && <p className="text-sm text-red-600">{errors.member_ids}</p>}
+
                             {formData.member_ids.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {formData.member_ids.map((memberId) => {
@@ -282,7 +335,7 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                                                     onClick={() => {
                                                         handleChange('member_ids', formData.member_ids.filter(id => id !== memberId));
                                                     }}
-                                                    className="ml-1 hover:text-red-600"
+                                                    className="ml-1 cursor-pointer hover:text-red-600"
                                                 >
                                                     <X className="h-3 w-3" />
                                                 </button>
@@ -294,13 +347,25 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                         </div>
                     )}
 
+                    {googleCalendarEnabled && !meeting && (
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="google-calendar-sync"
+                                checked={formData.is_googlecalendar_sync}
+                                onCheckedChange={(checked) => handleChange('is_googlecalendar_sync', checked)}
+                            />
+                            <Label htmlFor="google-calendar-sync" className="text-sm font-medium text-gray-700">
+                                {t('Sync with Google Calendar')}
+                            </Label>
+                        </div>
+                    )}
 
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose}>
-                            Cancel
+                            {t('Cancel')}
                         </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? 'Saving...' : (meeting ? 'Update Meeting' : 'Create Meeting')}
+                        <Button type="submit">
+                            {(meeting ? t('Update') : t('Create'))}
                         </Button>
                     </DialogFooter>
                 </form>

@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronLeft, ChevronRight, Plus, Clock, Calendar, TrendingUp, Search, Filter } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronLeft, ChevronRight, Plus, Clock, Calendar, TrendingUp } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import TimeEntryForm from '@/components/timesheets/TimeEntryForm';
 import { useTranslation } from 'react-i18next';
@@ -109,7 +110,7 @@ export default function MonthlyView({
 
     return (
         <PageTemplate 
-            title={t('Monthly Time Summary')} 
+            title={t('Monthly View')} 
             actions={pageActions}
             breadcrumbs={breadcrumbs}
         >
@@ -129,9 +130,9 @@ export default function MonthlyView({
                             </Button>
                             
                             <div className="text-center">
-                                <CardTitle className="text-xl">
+                                <CardTitle className="text-lg">
                                     {formatMonth()}
-                                    {isCurrentMonth() && <Badge className="ml-2">{t('Current Month')}</Badge>}
+                                    {isCurrentMonth() && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">{t('Current Month')}</span>}
                                 </CardTitle>
                             </div>
                             
@@ -153,47 +154,6 @@ export default function MonthlyView({
                 </CardHeader>
             </Card>
 
-            {/* Search and filters section */}
-            <div className="bg-white rounded-lg shadow mb-6">
-                <div className="p-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <form className="flex gap-2">
-                                <div className="relative w-64">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder={t('Search projects...')}
-                                        className="w-full pl-9"
-                                    />
-                                </div>
-                                <Button type="submit" size="sm">
-                                    <Search className="h-4 w-4 mr-1.5" />
-                                    {t('Search')}
-                                </Button>
-                            </form>
-                            
-                            <div className="ml-2">
-                                <Button 
-                                    variant="outline"
-                                    size="sm" 
-                                    className="h-8 px-2 py-1"
-                                >
-                                    <Filter className="h-3.5 w-3.5 mr-1.5" />
-                                    {t('Filters')}
-                                </Button>
-                            </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">{t('Export')}:</Label>
-                            <Button variant="outline" size="sm">
-                                {t('PDF')}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Month Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <Card>
@@ -202,7 +162,7 @@ export default function MonthlyView({
                             <Clock className="h-5 w-5 text-blue-600" />
                             <span className="text-sm font-medium text-blue-600">{t('Total Hours')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-blue-900">
+                        <div className="text-lg font-bold text-blue-900">
                             {monthData.total_hours.toFixed(1)}h
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -217,7 +177,7 @@ export default function MonthlyView({
                             <Calendar className="h-5 w-5 text-green-600" />
                             <span className="text-sm font-medium text-green-600">{t('Billable Hours')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-green-900">
+                        <div className="text-lg font-bold text-green-900">
                             {monthData.billable_hours.toFixed(1)}h
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -232,7 +192,7 @@ export default function MonthlyView({
                             <TrendingUp className="h-5 w-5 text-purple-600" />
                             <span className="text-sm font-medium text-purple-600">{t('Entries')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-purple-900">
+                        <div className="text-lg font-bold text-purple-900">
                             {monthData.entries_count}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -246,7 +206,7 @@ export default function MonthlyView({
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-orange-600">{t('Utilization')}</span>
                         </div>
-                        <div className="text-2xl font-bold text-orange-900">
+                        <div className="text-lg font-bold text-orange-900">
                             {((monthData.total_hours / (monthData.working_days * 8)) * 100).toFixed(0)}%
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -260,7 +220,7 @@ export default function MonthlyView({
                 {/* Project Breakdown */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>{t('Project Breakdown')}</CardTitle>
+                        <CardTitle className='text-lg'>{t('Project Breakdown')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
@@ -297,7 +257,7 @@ export default function MonthlyView({
                 {/* Weekly Breakdown */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>{t('Weekly Breakdown')}</CardTitle>
+                        <CardTitle className='text-lg'>{t('Weekly Breakdown')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">

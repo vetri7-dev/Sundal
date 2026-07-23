@@ -3,15 +3,47 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarMenuSkeleton } from '@/components/ui/sidebar';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { useLogos } from '@/contexts/LogoContext';
+import { useAppearance } from '@/hooks/use-appearance';
 
 export function ThemePreview() {
-  const { appearance, themeColor, position, variant, collapsible, style } = useThemePreview();
+  const { themeColor, position, variant, collapsible, style } = useThemePreview();
+  const { appearance } = useAppearance(); // Get appearance directly for immediate updates
   const { logoLight, logoDark } = useLogos();
   const [logoError, setLogoError] = React.useState(false);
+  const [forceUpdate, setForceUpdate] = React.useState(0);
+  const [isDarkTheme, setIsDarkTheme] = React.useState(() => document.documentElement.classList.contains('dark'));
   
-  // Reset logo error when logo sources change
+  // Listen for theme changes using MutationObserver (same as sidebar)
+  React.useEffect(() => {
+    const handleThemeChange = () => {
+      const newIsDark = document.documentElement.classList.contains('dark');
+      setIsDarkTheme(newIsDark);
+      setForceUpdate(prev => prev + 1);
+    };
+    
+    // Create a MutationObserver to watch for class changes on html element
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          handleThemeChange();
+        }
+      });
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  
+  // Listen for brand context changes to force immediate updates
   React.useEffect(() => {
     setLogoError(false);
+    setForceUpdate(prev => prev + 1);
   }, [logoLight, logoDark, appearance]);
   
   // Determine sidebar style class
@@ -21,13 +53,13 @@ export function ThemePreview() {
     return 'bg-sidebar text-sidebar-foreground';
   };
   
-  // Logo preview based on appearance
+  // Logo preview based on actual DOM theme state (same logic as sidebar)
   const getLogoSrc = () => {
     if (logoError) return '';
     
     const appUrl = (window as any).__APP_URL__ || window.location.origin;
     
-    if (appearance === 'dark') {
+    if (isDarkTheme) {
       const defaultLight = `${appUrl}/images/logos/logo-light.png`;
       return logoLight || defaultLight;
     } else {
@@ -52,7 +84,7 @@ export function ThemePreview() {
         </div>
       </div>
       
-      <div className={`flex ${position === 'right' ? 'flex-row-reverse' : 'flex-row'} h-64`}>
+      <div className={`flex h-64`}>
         {/* Sidebar */}
         <div 
           className={`
@@ -67,7 +99,7 @@ export function ThemePreview() {
           <div className={`p-1 border-b border-sidebar-border flex items-center justify-center overflow-hidden ${getSidebarStyleClass()}`}>
             {!logoError && getLogoSrc() ? (
               <img 
-                key={`preview-${appearance}-${getLogoSrc()}`} 
+                key={`preview-${isDarkTheme}-${forceUpdate}-${logoLight}-${logoDark}`} 
                 src={getLogoSrc()} 
                 alt={getTitleText()} 
                 className="h-5 max-w-[60px] object-contain" 

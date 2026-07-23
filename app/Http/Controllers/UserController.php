@@ -364,4 +364,31 @@ class UserController extends BaseController
         ], 400);
     }
 
+    public function destroyLoginHistory($id)
+    {
+        $loginHistory = \App\Models\LoginHistory::find($id);
+        if (!$loginHistory) {
+            return back()->with('error', __('Login history not found'));
+        }
+        $authUser = auth()->user();
+        if ($authUser->type !== 'superadmin' && $loginHistory->created_by !== $authUser->id) {
+            return back()->with('error', __('Unauthorized'));
+        }
+        $loginHistory->delete();
+        return back()->with('success', __('Login history deleted successfully!'));
+    }
+
+    public function updateLayoutDirection(\Illuminate\Http\Request $request)
+    {
+        $request->validate(['layoutDirection' => 'required|string|in:left,right']);
+        $user = auth()->user();
+        if ($user) {
+            updateSetting('layoutDirection', $request->layoutDirection);
+            return response()->json([
+                'success' => true,
+                'layoutDirection' => $request->layoutDirection,
+            ]);
+        }
+        return response()->json(['success' => false], 400);
+    }
 }

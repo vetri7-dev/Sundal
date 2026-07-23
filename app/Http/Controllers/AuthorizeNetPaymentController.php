@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plan;
+use App\Models\Invoice;
+use App\Models\PaymentSetting;
 use Illuminate\Http\Request;
 use net\authorize\api\contract\v1 as AnetAPI;
 use net\authorize\api\controller as AnetController;
 
 class AuthorizeNetPaymentController extends Controller
 {
-    // Supported countries and currencies for AuthorizeNet
     private const SUPPORTED_COUNTRIES = ['US', 'CA', 'GB', 'AU'];
     private const SUPPORTED_CURRENCIES = [
         'USD', 'CAD', 'CHF', 'DKK', 'EUR', 'GBP', 'NOK', 'PLN', 'SEK', 'AUD', 'NZD'
@@ -29,10 +30,8 @@ class AuthorizeNetPaymentController extends Controller
                 return response()->json(['error' => 'AuthorizeNet not properly configured'], 400);
             }
 
-            // Get currency from settings or default to USD
             $currency = $settings['general_settings']['currency'] ?? 'USD';
             
-            // Validate currency support
             if (!in_array($currency, self::SUPPORTED_CURRENCIES)) {
                 $currency = 'USD';
             }
@@ -72,7 +71,6 @@ class AuthorizeNetPaymentController extends Controller
                 return back()->withErrors(['error' => __('AuthorizeNet not properly configured')]);
             }
 
-            // Validate minimum amount (AuthorizeNet requires minimum $0.50)
             if ($pricing['final_price'] < 0.50) {
                 return back()->withErrors(['error' => __('Minimum payment amount is $0.50')]);
             }
@@ -102,37 +100,30 @@ class AuthorizeNetPaymentController extends Controller
     private function createAuthorizeNetTransaction($paymentData, $pricing, $settings)
     {
         try {
-            // Set up merchant authentication
             $merchantAuthentication = new AnetAPI\MerchantAuthenticationType();
             $merchantAuthentication->setName($settings['payment_settings']['authorizenet_merchant_id']);
             $merchantAuthentication->setTransactionKey($settings['payment_settings']['authorizenet_transaction_key']);
 
-            // Set up credit card information
             $creditCard = new AnetAPI\CreditCardType();
             $creditCard->setCardNumber(preg_replace('/\s+/', '', $paymentData['card_number']));
             
-            // Fix expiration date format - AuthorizeNet expects YYYY-MM format
             $expiryYear = 2000 + intval($paymentData['expiry_year']);
             $expiryMonth = str_pad($paymentData['expiry_month'], 2, '0', STR_PAD_LEFT);
             $creditCard->setExpirationDate($expiryYear . '-' . $expiryMonth);
             $creditCard->setCardCode($paymentData['cvv']);
 
-            // Set up payment method
             $paymentOne = new AnetAPI\PaymentType();
             $paymentOne->setCreditCard($creditCard);
 
-            // Set up order information
             $order = new AnetAPI\OrderType();
             $order->setInvoiceNumber('INV-' . time());
             $order->setDescription('Plan Subscription Payment');
 
-            // Set up customer information
             $customer = new AnetAPI\CustomerDataType();
             $customer->setType('individual');
             $customer->setId(auth()->id());
             $customer->setEmail(auth()->user()->email);
 
-            // Set up billing information
             $billTo = new AnetAPI\CustomerAddressType();
             $billTo->setFirstName(explode(' ', $paymentData['cardholder_name'])[0]);
             $billTo->setLastName(implode(' ', array_slice(explode(' ', $paymentData['cardholder_name']), 1)) ?: 'Customer');
@@ -143,7 +134,6 @@ class AuthorizeNetPaymentController extends Controller
             $billTo->setZip('00000');
             $billTo->setCountry('US');
 
-            // Create transaction request
             $transactionRequestType = new AnetAPI\TransactionRequestType();
             $transactionRequestType->setTransactionType('authCaptureTransaction');
             $transactionRequestType->setAmount(number_format($pricing['final_price'], 2, '.', ''));
@@ -152,7 +142,6 @@ class AuthorizeNetPaymentController extends Controller
             $transactionRequestType->setBillTo($billTo);
             $transactionRequestType->setCustomer($customer);
 
-            // Add merchant defined fields for tracking
             $merchantDefinedField1 = new AnetAPI\UserFieldType();
             $merchantDefinedField1->setName('plan_id');
             $merchantDefinedField1->setValue($paymentData['plan_id']);
@@ -163,12 +152,10 @@ class AuthorizeNetPaymentController extends Controller
             
             $transactionRequestType->setUserFields([$merchantDefinedField1, $merchantDefinedField2]);
 
-            // Create the API request
             $request = new AnetAPI\CreateTransactionRequest();
             $request->setMerchantAuthentication($merchantAuthentication);
             $request->setTransactionRequest($transactionRequestType);
 
-            // Execute the request
             $controller = new AnetController\CreateTransactionController($request);
             
             $environment = ($settings['payment_settings']['authorizenet_mode'] === 'sandbox') 
@@ -180,6 +167,11 @@ class AuthorizeNetPaymentController extends Controller
             return $this->handleAuthorizeNetResponse($response);
             
         } catch (\Exception $e) {
+            \Log::error('AuthorizeNet transaction error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return [
                 'success' => false,
                 'error' => __('Transaction processing failed. Please check your card details and try again.'),
@@ -225,16 +217,19 @@ class AuthorizeNetPaymentController extends Controller
 
         $responseCode = $tresponse->getResponseCode();
         
-        // Response codes: 1 = Approved, 2 = Declined, 3 = Error, 4 = Held for Review
         switch ($responseCode) {
-            case '1': // Approved
+            case '1':
+                $transId = $tresponse->getTransId();
+                if (!$transId || $transId === '0') {
+                    $transId = 'authnet_' . time();
+                }
                 return [
                     'success' => true,
                     'error' => null,
-                    'transaction_id' => $tresponse->getTransId()
+                    'transaction_id' => $transId
                 ];
                 
-            case '2': // Declined
+            case '2':
                 $errorMessage = 'Transaction declined';
                 if ($tresponse->getErrors() && count($tresponse->getErrors()) > 0) {
                     $errorMessage = $tresponse->getErrors()[0]->getErrorText();
@@ -246,7 +241,7 @@ class AuthorizeNetPaymentController extends Controller
                     'transaction_id' => null
                 ];
                 
-            case '3': // Error
+            case '3':
                 $errorMessage = 'Transaction error';
                 if ($tresponse->getErrors() && count($tresponse->getErrors()) > 0) {
                     $errorMessage = $tresponse->getErrors()[0]->getErrorText();
@@ -258,7 +253,7 @@ class AuthorizeNetPaymentController extends Controller
                     'transaction_id' => null
                 ];
                 
-            case '4': // Held for Review
+            case '4':
                 return [
                     'success' => false,
                     'error' => __('Transaction is being reviewed. Please contact support.'),
@@ -299,9 +294,241 @@ class AuthorizeNetPaymentController extends Controller
         return __('Payment processing failed. Please check your card details and try again.');
     }
 
-    /**
-     * Test AuthorizeNet connection and credentials
-     */
+    private function createInvoiceAuthorizeNetTransaction($paymentData, $pricing, $settings)
+    {
+        try {
+            $merchantAuthentication = new AnetAPI\MerchantAuthenticationType();
+            $merchantAuthentication->setName($settings['authorizenet_merchant_id']);
+            $merchantAuthentication->setTransactionKey($settings['authorizenet_transaction_key']);
+
+            $creditCard = new AnetAPI\CreditCardType();
+            $creditCard->setCardNumber(preg_replace('/\s+/', '', $paymentData['card_number']));
+            
+            $expiryYear = 2000 + intval($paymentData['expiry_year']);
+            $expiryMonth = str_pad($paymentData['expiry_month'], 2, '0', STR_PAD_LEFT);
+            $creditCard->setExpirationDate($expiryYear . '-' . $expiryMonth);
+            $creditCard->setCardCode($paymentData['cvv']);
+
+            $paymentOne = new AnetAPI\PaymentType();
+            $paymentOne->setCreditCard($creditCard);
+
+            $order = new AnetAPI\OrderType();
+            $order->setInvoiceNumber('INV-' . time());
+            $order->setDescription('Invoice Payment');
+
+            $customer = new AnetAPI\CustomerDataType();
+            $customer->setType('individual');
+            
+            if (auth()->check()) {
+                $customer->setId(auth()->id());
+                $customer->setEmail(auth()->user()->email);
+            } else {
+                $customer->setId('guest_' . time());
+                $customer->setEmail('guest@example.com');
+            }
+
+            $billTo = new AnetAPI\CustomerAddressType();
+            $billTo->setFirstName(explode(' ', $paymentData['cardholder_name'])[0]);
+            $billTo->setLastName(implode(' ', array_slice(explode(' ', $paymentData['cardholder_name']), 1)) ?: 'Customer');
+            $billTo->setCompany(auth()->check() ? (auth()->user()->name ?? '') : 'Guest');
+            $billTo->setAddress('N/A');
+            $billTo->setCity('N/A');
+            $billTo->setState('N/A');
+            $billTo->setZip('00000');
+            $billTo->setCountry('US');
+
+            $transactionRequestType = new AnetAPI\TransactionRequestType();
+            $transactionRequestType->setTransactionType('authCaptureTransaction');
+            $transactionRequestType->setAmount(number_format($pricing['final_price'], 2, '.', ''));
+            $transactionRequestType->setPayment($paymentOne);
+            $transactionRequestType->setOrder($order);
+            $transactionRequestType->setBillTo($billTo);
+            $transactionRequestType->setCustomer($customer);
+
+            $merchantDefinedField1 = new AnetAPI\UserFieldType();
+            $merchantDefinedField1->setName('invoice_token');
+            $merchantDefinedField1->setValue($paymentData['invoice_token']);
+            
+            $merchantDefinedField2 = new AnetAPI\UserFieldType();
+            $merchantDefinedField2->setName('user_id');
+            $merchantDefinedField2->setValue(auth()->id() ?? 'guest');
+            
+            $transactionRequestType->setUserFields([$merchantDefinedField1, $merchantDefinedField2]);
+
+            $request = new AnetAPI\CreateTransactionRequest();
+            $request->setMerchantAuthentication($merchantAuthentication);
+            $request->setTransactionRequest($transactionRequestType);
+
+            $controller = new AnetController\CreateTransactionController($request);
+            
+            $environment = ($settings['authorizenet_mode'] === 'sandbox') 
+                ? \net\authorize\api\constants\ANetEnvironment::SANDBOX 
+                : \net\authorize\api\constants\ANetEnvironment::PRODUCTION;
+                
+            $response = $controller->executeWithApiResponse($environment);
+
+            return $this->handleAuthorizeNetResponse($response);
+            
+        } catch (\Exception $e) {
+            \Log::error('AuthorizeNet invoice error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => __('Transaction processing failed. Please check your card details and try again.'),
+                'transaction_id' => null
+            ];
+        }
+    }
+
+    public function processInvoicePayment(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.50',
+                'card_number' => 'required|string',
+                'expiry_month' => 'required|string|size:2',
+                'expiry_year' => 'required|string|size:2',
+                'cvv' => 'required|string|min:3|max:4',
+                'cardholder_name' => 'required|string|min:2|max:50',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 400);
+            }
+            throw $e;
+        }
+
+        try {
+            $invoice = Invoice::with(['creator', 'client'])->where('payment_token', $validated['invoice_token'])->firstOrFail();
+
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['authorizenet_merchant_id']) || !isset($settings['authorizenet_transaction_key'])) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('Authorize.Net payment not configured')
+                    ], 400);
+                }
+                return back()->withErrors(['error' => __('Authorize.Net payment not configured')]);
+            }
+
+            $pricing = ['final_price' => $validated['amount']];
+            
+            $result = $this->createInvoiceAuthorizeNetTransaction($validated, $pricing, $settings);
+
+            if ($result['success'] && isset($result['transaction_id'])) {
+                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id']);
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => __('Payment completed successfully!'),
+                        'redirect_url' => route('invoices.show', $invoice->id) . '?payment_success=true'
+                    ]);
+                }
+
+                return redirect()->route('invoices.show', $invoice->id)
+                    ->with('success', __('Payment completed successfully!'));
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error'] ?? __('Payment processing failed')
+                ], 400);
+            }
+
+            return back()->withErrors(['error' => $result['error'] ?? __('Payment processing failed')]);
+
+        } catch (\Exception $e) {
+            \Log::error('Invoice payment error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('Payment processing failed. Please try again or contact support.')
+                ], 500);
+            }
+            
+            return back()->withErrors(['error' => __('Payment processing failed. Please try again or contact support.')]);
+        }
+    }
+
+    public function createInvoicePayment(Request $request)
+    {
+        $validated = $request->validate([
+            'invoice_token' => 'required|string',
+            'amount' => 'required|numeric|min:0.50'
+        ]);
+
+        try {
+            $invoice = Invoice::with(['creator', 'client'])->where('payment_token', $validated['invoice_token'])->firstOrFail();
+            
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (!isset($settings['authorizenet_merchant_id']) || !isset($settings['authorizenet_transaction_key'])) {
+                return response()->json(['error' => 'AuthorizeNet not configured'], 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'merchant_id' => $settings['authorizenet_merchant_id'],
+                'amount' => number_format($validated['amount'], 2, '.', ''),
+                'currency' => 'USD',
+                'is_sandbox' => $settings['authorizenet_mode'] === 'sandbox',
+                'supported_countries' => self::SUPPORTED_COUNTRIES,
+                'supported_currencies' => self::SUPPORTED_CURRENCIES,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceSuccess(Request $request)
+    {
+        try {
+            $invoiceToken = $request->input('invoice_token');
+            $amount = $request->input('amount');
+
+            if ($invoiceToken && $amount) {
+                $invoice = Invoice::with(['creator', 'client'])->where('payment_token', $invoiceToken)->first();
+
+                if ($invoice && $invoice->creator) {
+                    $invoice->createPaymentRecord($amount, 'authorizenet', 'authnet_' . time());
+
+                    return redirect()->route('invoices.payment', $invoiceToken)
+                        ->with('success', __('Payment successful'));
+                }
+            }
+
+            return redirect()->route('home')
+                ->with('error', __('Payment verification failed'));
+
+        } catch (\Exception $e) {
+            return redirect()->route('home')
+                ->with('error', __('Payment processing failed'));
+        }
+    }
+
     public function testConnection(Request $request)
     {
         try {
@@ -315,7 +542,6 @@ class AuthorizeNetPaymentController extends Controller
                 ]);
             }
 
-            // Test with AuthenticateTest API call
             $merchantAuthentication = new AnetAPI\MerchantAuthenticationType();
             $merchantAuthentication->setName($settings['payment_settings']['authorizenet_merchant_id']);
             $merchantAuthentication->setTransactionKey($settings['payment_settings']['authorizenet_transaction_key']);
@@ -354,6 +580,103 @@ class AuthorizeNetPaymentController extends Controller
                 'success' => false,
                 'message' => __('Connection test failed: ') . $e->getMessage()
             ]);
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.50',
+                'card_number' => 'required|string',
+                'expiry_month' => 'required|string',
+                'expiry_year' => 'required|string',
+                'cvv' => 'required|string',
+                'cardholder_name' => 'required|string',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        }
+
+        try {
+            $invoice = Invoice::with(['creator', 'client'])->where('payment_token', $validated['invoice_token'])->firstOrFail();
+
+            if (!$invoice->creator) {
+                return response()->json(['success' => false, 'message' => 'Invoice creator not found'], 400);
+            }
+
+            $paymentSettings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->pluck('value', 'key')
+                ->toArray();
+
+            $settings = [
+                'authorizenet_merchant_id' => $paymentSettings['authorizenet_merchant_id'],
+                'authorizenet_transaction_key' => $paymentSettings['authorizenet_transaction_key'],
+                'authorizenet_mode' => $paymentSettings['authorizenet_mode'] ?? 'sandbox'
+            ];
+
+            $pricing = ['final_price' => $validated['amount']];
+            
+            $result = $this->createInvoiceAuthorizeNetTransaction($validated, $pricing, $settings);
+
+            if ($result && $result['success'] && $result['transaction_id']) {
+                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id']);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment completed successfully.',
+                    'redirect_url' => route('invoices.payment', $invoice->payment_token)
+                ]);
+            }
+
+            return response()->json(['success' => false, 'message' => ($result['error'] ?? 'Payment processing failed')], 400);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['success' => false, 'message' => 'Invoice not found'], 404);
+        } catch (\Exception $e) {
+            \Log::error('processInvoicePaymentFromLink error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function createInvoicePaymentFromLink(Request $request)
+    {
+        $validated = $request->validate([
+            'invoice_token' => 'required|string',
+            'amount' => 'required|numeric|min:0.50'
+        ]);
+
+        try {
+            $invoice = Invoice::with(['creator', 'client'])->where('payment_token', $validated['invoice_token'])->firstOrFail();
+            
+            if (!$invoice->creator) {
+                return response()->json(['error' => 'Invoice creator not found'], 400);
+            }
+            
+            $paymentSettings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['authorizenet_merchant_id', 'authorizenet_transaction_key', 'authorizenet_mode', 'is_authorizenet_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if (empty($paymentSettings['authorizenet_merchant_id']) || 
+                empty($paymentSettings['authorizenet_transaction_key']) ||
+                $paymentSettings['is_authorizenet_enabled'] !== '1') {
+                return response()->json(['error' => 'AuthorizeNet not configured'], 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'merchant_id' => $paymentSettings['authorizenet_merchant_id'],
+                'amount' => number_format($validated['amount'], 2, '.', ''),
+                'currency' => 'USD',
+                'is_sandbox' => ($paymentSettings['authorizenet_mode'] ?? 'sandbox') === 'sandbox',
+                'supported_countries' => self::SUPPORTED_COUNTRIES,
+                'supported_currencies' => self::SUPPORTED_CURRENCIES,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }

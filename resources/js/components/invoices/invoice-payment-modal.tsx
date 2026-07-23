@@ -19,7 +19,25 @@ import { InvoiceXenditForm } from '@/components/invoices/invoice-xendit-form';
 import { InvoicePayTRForm } from '@/components/invoices/invoice-paytr-form';
 import { InvoiceMollieForm } from '@/components/invoices/invoice-mollie-form';
 import { InvoiceToyyibPayForm } from '@/components/invoices/invoice-toyyibpay-form';
+import { InvoiceBenefitForm } from '@/components/invoices/invoice-benefit-form';
+import { InvoiceAamarpayForm } from '@/components/invoices/invoice-aamarpay-form';
+import { InvoiceMidtransForm } from '@/components/invoices/invoice-midtrans-form';
+import { InvoiceYooKassaForm } from '@/components/invoices/invoice-yookassa-form';
 import { InvoicePaymentForm } from '@/components/invoice-payment-form';
+import { InvoicePaiementForm } from '@/components/invoices/invoice-paiement-form';
+import { InvoiceCinetPayForm } from '@/components/invoices/invoice-cinetpay-form';
+import { InvoicePayHereForm } from '@/components/invoices/invoice-payhere-form';
+import { InvoiceFedaPayForm } from '@/components/invoices/invoice-fedapay-form';
+import { InvoiceAuthorizeNetForm } from '@/components/invoices/invoice-authorizenet-form';
+import { InvoiceKhaltiForm } from '@/components/invoices/invoice-khalti-form';
+import { InvoiceEasebuzzForm } from '@/components/invoices/invoice-easebuzz-form';
+import { InvoiceSkrillForm } from '@/components/invoices/invoice-skrill-form';
+import { InvoiceCoinGateForm } from '@/components/invoices/invoice-coingate-form';
+import { InvoicePayfastForm } from '@/components/invoices/invoice-payfast-form';
+import { InvoiceIyzipayForm } from '@/components/invoices/invoice-iyzipay-form';
+import { InvoiceOzowForm } from '@/components/invoices/invoice-ozow-form';
+import { InvoiceCashfreeForm } from '@/components/invoices/invoice-cashfree-form';
+import { InvoicePayTabsForm } from '@/components/invoices/invoice-paytabs-form';
 import { formatCurrency } from '@/utils/currency';
 import axios from 'axios';
 
@@ -118,8 +136,6 @@ export function InvoicePaymentModal({ invoice, open, onClose, onSuccess, enabled
       case 'yookassa':
       case 'aamarpay':
       case 'midtrans':
-      case 'paymentwall':
-      case 'sspay':
       case 'tap':
       case 'xendit':
         return <CreditCard className="h-5 w-5" />;
@@ -186,28 +202,144 @@ export function InvoicePaymentModal({ invoice, open, onClose, onSuccess, enabled
         return <InvoiceMollieForm {...commonProps} mollieApiKey={paymentCredentials.mollieApiKey} amount={paymentAmount} />;
       case 'toyyibpay':
         return <InvoiceToyyibPayForm {...commonProps} toyyibpayCategoryCode={paymentCredentials.toyyibpayCategoryCode} amount={paymentAmount} />;
-      case 'paytabs':
-      case 'skrill':
-      case 'coingate':
-      case 'payfast':
-      case 'cashfree':
-      case 'iyzipay':
       case 'benefit':
-      case 'ozow':
-      case 'easebuzz':
-      case 'khalti':
-      case 'authorizenet':
-      case 'fedapay':
-      case 'payhere':
+        return <InvoiceBenefitForm {...commonProps} amount={paymentAmount} />;
       case 'cinetpay':
+        return (
+          <InvoiceCinetPayForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+            cinetpaySiteId={paymentCredentials.cinetpaySiteId}
+          />
+        );
+      case 'payhere':
+        return (
+          <InvoicePayHereForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+            payhereMerchantId={paymentCredentials.payhereMerchantId}
+          />
+        );
+      case 'fedapay':
+        return (
+          <InvoiceFedaPayForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+            fedapaySecretKey={paymentCredentials.fedapaySecretKey}
+          />
+        );
+      case 'authorizenet':
+        return (
+          <InvoiceAuthorizeNetForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'ozow':
+        return (
+          <InvoiceOzowForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'cashfree':
+        return (
+          <InvoiceCashfreeForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'paytabs':
+        return (
+          <InvoicePayTabsForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'skrill':
+        return (
+          <InvoiceSkrillForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'coingate':
+        return (
+          <InvoiceCoinGateForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'payfast':
+        return (
+          <InvoicePayfastForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'easebuzz':
+        return (
+          <InvoiceEasebuzzForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
+      case 'khalti':
+        return (
+          <InvoiceKhaltiForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+            khaltiPublicKey={paymentCredentials.khaltiPublicKey}
+          />
+        );
+      case 'iyzipay':
+        return (
+          <InvoiceIyzipayForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
       case 'paiement':
-      case 'nepalste':
+        return (
+          <InvoicePaiementForm
+            invoice={invoice}
+            amount={paymentAmount}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        );
       case 'yookassa':
+        return <InvoiceYooKassaForm {...commonProps} amount={paymentAmount} />;
       case 'aamarpay':
+        return <InvoiceAamarpayForm {...commonProps} amount={paymentAmount} />;
       case 'midtrans':
-      case 'paymentwall':
-      case 'sspay':
-        return <div className="p-4 text-center text-muted-foreground">{t('Payment method not implemented yet')}</div>;
+        return <InvoiceMidtransForm {...commonProps} amount={paymentAmount} />;
       default:
         return null;
     }

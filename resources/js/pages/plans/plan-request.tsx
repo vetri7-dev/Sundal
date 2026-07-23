@@ -8,8 +8,9 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Filter, Search } from 'lucide-react';
+import { Filter, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getImagePath } from '@/utils/helpers';
 
 export default function PlanRequestsPage() {
   const { t } = useTranslation();
@@ -18,11 +19,18 @@ export default function PlanRequestsPage() {
   const userRole = auth.user?.type || auth.user?.role;
   
   const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
-  const [filterValues, setFilterValues] = useState<Record<string, any>>({});
+  const [filterValues, setFilterValues] = useState<Record<string, any>>(() => {
+    const initial: Record<string, any> = {};
+    planRequestsConfig.filters?.forEach(filter => {
+      initial[filter.key] = pageFilters[filter.key] || 'all';
+    });
+    return initial;
+  });
   const [showFilters, setShowFilters] = useState(false);
   
   useEffect(() => {
-    if (flash?.success) {
+    const isDemo = (window as any).isDemo || false;
+    if (flash?.success && !isDemo) {
       toast.success(flash.success);
     }
     if (flash?.error) {
@@ -39,38 +47,27 @@ export default function PlanRequestsPage() {
   }, []);
 
   const handleAction = (action: string, item: any) => {
+    const isDemo = (window as any).isDemo || false;
     if (action === 'approve') {
       router.post(route("plan-requests.approve", item.id), {}, {
-        onSuccess: () => {
-          toast.success(t('Plan request approved successfully'));
-        },
         onError: () => {
           toast.error(t('Failed to approve plan request'));
         }
       });
     } else if (action === 'reject') {
       router.post(route("plan-requests.reject", item.id), {}, {
-        onSuccess: () => {
-          toast.success(t('Plan request rejected successfully'));
-        },
         onError: () => {
           toast.error(t('Failed to reject plan request'));
         }
       });
     } else if (action === 'cancel') {
       router.delete(route("my-plan-requests.cancel", item.id), {
-        onSuccess: () => {
-          toast.success(t('Plan request cancelled successfully'));
-        },
         onError: () => {
           toast.error(t('Failed to cancel plan request'));
         }
       });
     } else if (action === 'delete') {
       router.delete(route("plan-requests.destroy", item.id), {
-        onSuccess: () => {
-          toast.success(t('Plan request deleted successfully'));
-        },
         onError: () => {
           toast.error(t('Failed to delete plan request'));
         }
@@ -78,52 +75,69 @@ export default function PlanRequestsPage() {
     }
   };
 
+  const routeName = isMyRequests ? 'my-plan-requests.index' : 'plan-requests.index';
+
+  const buildParams = (
+    overrides: Record<string, any> = {},
+    filterOverrides: Record<string, any> = {}
+  ) => {
+    const params: any = { page: 1 };
+    if (searchTerm) params.search = searchTerm;
+    const merged = { ...filterValues, ...filterOverrides };
+    Object.entries(merged).forEach(([k, v]) => {
+      if (v && v !== 'all' && v !== '') params[k] = v;
+    });
+    if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+    if (pageFilters.sort_field) params.sort_field = pageFilters.sort_field;
+    if (pageFilters.sort_direction) params.sort_direction = pageFilters.sort_direction;
+    return { ...params, ...overrides };
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFilters();
+    router.get(route(routeName), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
   };
 
   const applyFilters = () => {
-    const params: any = { page: 1 };
-    
-    if (searchTerm) {
-      params.search = searchTerm;
-    }
-    
-    Object.entries(filterValues).forEach(([key, value]) => {
-      if (value && value !== 'all') {
-        params[key] = value;
-      }
-    });
-    
-    if (pageFilters.per_page) {
-      params.per_page = pageFilters.per_page;
-    }
-    
-    router.get(route("plan-requests.index"), params, { preserveState: true, preserveScroll: true });
+    router.get(route(routeName), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
   };
 
   const handleFilterChange = (key: string, value: any) => {
-    setFilterValues(prev => ({ ...prev, [key]: value }));
-    
-    const params: any = { page: 1 };
-    
-    if (searchTerm) {
-      params.search = searchTerm;
-    }
-    
     const newFilters = { ...filterValues, [key]: value };
-    Object.entries(newFilters).forEach(([k, v]) => {
-      if (v && v !== 'all') {
-        params[k] = v;
-      }
+    setFilterValues(newFilters);
+    router.get(route(routeName), buildParams({ page: 1 }, { [key]: value }), { preserveState: false, preserveScroll: false });
+  };
+
+  const handleSort = (field: string) => {
+    const direction = pageFilters.sort_field === field && pageFilters.sort_direction === 'asc' ? 'desc' : 'asc';
+    router.get(route(routeName), buildParams({ sort_field: field, sort_direction: direction, page: 1 }), { preserveState: false, preserveScroll: false });
+  };
+
+  const handleResetFilters = () => {
+    const resetFilters: Record<string, any> = {};
+    planRequestsConfig.filters?.forEach(filter => {
+      resetFilters[filter.key] = 'all';
     });
-    
-    if (pageFilters.per_page) {
-      params.per_page = pageFilters.per_page;
+    setFilterValues(resetFilters);
+    setSearchTerm('');
+    setShowFilters(false);
+    const params: any = { page: 1 };
+    if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+    router.get(route(routeName), params, { preserveState: false, preserveScroll: false });
+  };
+
+  // Render sort icon function like in CrudTable
+  const renderSortIcon = (column: any) => {
+    if (!column.sortable) return null;
+
+    if (pageFilters.sort_field === column.key) {
+      return pageFilters.sort_direction === 'asc' ?
+        <ChevronUp className="ml-1 h-4 w-4" /> :
+        <ChevronDown className="ml-1 h-4 w-4" />;
     }
-    
-    router.get(route("plan-requests.index"), params, { preserveState: true, preserveScroll: true });
+
+    // Always show the double arrow for sortable columns when not sorted
+    return <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />;
   };
 
   const breadcrumbs = [
@@ -134,23 +148,20 @@ export default function PlanRequestsPage() {
 
   const hasActiveFilters = () => {
     return Object.entries(filterValues).some(([key, value]) => {
-      return value && value !== '';
+      return value && value !== 'all' && value !== '';
     }) || searchTerm !== '';
   };
 
-  // Create actions based on user type
+  const activeFilterCount = () => {
+    return Object.entries(filterValues).filter(([key, value]) => {
+      return value && value !== 'all' && value !== '';
+    }).length + (searchTerm ? 1 : 0);
+  };
+
   const getTableActions = () => {
     if (isMyRequests || userRole !== 'superadmin') {
-      // Company user viewing their own requests - show cancel button
-      return [{
-        label: t('Cancel'),
-        icon: 'X',
-        action: 'cancel',
-        className: 'text-red-600',
-        condition: (item: any) => item.status === 'pending'
-      }];
+      return [];
     } else {
-      // Super admin viewing all requests - show approve/reject/delete buttons
       return [
         {
           label: t('Approve'),
@@ -179,6 +190,72 @@ export default function PlanRequestsPage() {
 
   const filteredActions = getTableActions();
 
+  const customColumns = planRequestsConfig.table.columns.map(col => {
+    if (col.key === 'user.name') {
+      return {
+        ...col,
+        label: t('Company'),
+        render: (_, row) => {
+          const avatarUrl = row.user.avatar;
+          return (
+            <div className="flex items-center gap-3">
+              <img
+                src={avatarUrl}
+                alt={row.user?.name || 'User'}
+                className="h-10 w-10 rounded-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = getImagePath('users/avatar.png');
+                }}
+              />
+              <div>
+                <div className="font-medium">{row.user?.name || '-'}</div>
+                <div className="text-xs text-gray-500">{row.user?.email || ''}</div>
+              </div>
+            </div>
+          );
+        }
+      };
+    } else if (col.key === 'plan.name') {
+      return {
+        ...col,
+        label: t(col.label),
+        render: (_, row) => {
+          const planName = row.plan?.name;
+          if (!planName) return '-';
+
+          return (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 capitalize">
+                {planName}
+            </span>
+          );
+        }
+      };
+    } else if (col.key === 'status') {
+      return {
+        ...col,
+        label: t(col.label),
+        render: (value) => {
+          const statusColors: Record<string, string> = {
+            pending:  'bg-yellow-50 text-yellow-700 ring-yellow-600/20',
+            approved: 'bg-green-50 text-green-700 ring-green-600/20',
+            rejected: 'bg-red-50 text-red-700 ring-red-600/20'
+          };
+          return (
+            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset capitalize ${statusColors[value] || 'bg-gray-50 text-gray-700 ring-gray-600/20'}`}>
+              {t(value)}
+            </span>
+          );
+        }
+      };
+    } else {
+      return {
+        ...col,
+        label: t(col.label)
+      };
+    }
+  });
+
   return (
     <PageTemplate 
       title={t('Plan Requests')} 
@@ -186,7 +263,7 @@ export default function PlanRequestsPage() {
       breadcrumbs={breadcrumbs}
       noPadding
     >
-      <div className="bg-white rounded-lg shadow mb-4">
+      <div className="bg-white rounded-lg border shadow mb-4">
         <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -216,6 +293,11 @@ export default function PlanRequestsPage() {
                   >
                     <Filter className="h-3.5 w-3.5 mr-1.5" />
                     {showFilters ? t('Hide Filters') : t('Filters')}
+                    {hasActiveFilters() && (
+                      <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                        {activeFilterCount()}
+                      </span>
+                    )}
                   </Button>
                 </div>
               )}
@@ -226,19 +308,7 @@ export default function PlanRequestsPage() {
               <Select 
                 value={pageFilters.per_page?.toString() || "10"} 
                 onValueChange={(value) => {
-                  const params: any = { page: 1, per_page: parseInt(value) };
-                  
-                  if (searchTerm) {
-                    params.search = searchTerm;
-                  }
-                  
-                  Object.entries(filterValues).forEach(([key, val]) => {
-                    if (val && val !== '') {
-                      params[key] = val;
-                    }
-                  });
-                  
-                  router.get(route('plan-requests.index'), params, { preserveState: true, preserveScroll: true });
+                  router.get(route(routeName), buildParams({ page: 1, per_page: parseInt(value) }), { preserveState: false, preserveScroll: false });
                 }}
               >
                 <SelectTrigger className="w-16 h-8">
@@ -277,6 +347,16 @@ export default function PlanRequestsPage() {
                     </Select>
                   </div>
                 ))}
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="h-9"
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters()}
+                >
+                  {t("Reset Filters")}
+                </Button>
               </div>
             </div>
           )}
@@ -285,19 +365,19 @@ export default function PlanRequestsPage() {
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <CrudTable
-          columns={planRequestsConfig.table.columns.map(col => ({
-            ...col,
-            label: t(col.label)
-          }))}
+          columns={customColumns}
           actions={filteredActions}
           data={planRequests?.data || []}
           from={planRequests?.from || 1}
           onAction={handleAction}
+          sortField={pageFilters.sort_field}
+          sortDirection={pageFilters.sort_direction}
+          onSort={handleSort}
           permissions={permissions}
           entityPermissions={planRequestsConfig.entity.permissions}
         />
 
-        <div className="p-4 border-t flex items-center justify-between">
+        <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
           <div className="text-sm text-muted-foreground">
             {t('Showing')} <span className="font-medium">{planRequests?.from || 0}</span> {t('to')} <span className="font-medium">{planRequests?.to || 0}</span> {t('of')} <span className="font-medium">{planRequests?.total || 0}</span> {t('plan requests')}
           </div>
@@ -314,7 +394,11 @@ export default function PlanRequestsPage() {
                   size={isTextLink ? "sm" : "icon"}
                   className={isTextLink ? "px-3" : "h-8 w-8"}
                   disabled={!link.url}
-                  onClick={() => link.url && router.get(link.url)}
+                  onClick={() => {
+                    if (!link.url) return;
+                    const pageNum = new URL(link.url).searchParams.get('page');
+                    router.get(route(routeName), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false, preserveScroll: false });
+                  }}
                 >
                   {isTextLink ? t(label) : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                 </Button>

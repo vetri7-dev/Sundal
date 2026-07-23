@@ -50,7 +50,7 @@ class ProjectExpenseController extends Controller
         }
 
         if ($request->status) {
-            $query->where('status', $request->status);
+            $query->where('project_expenses.status', $request->status);
         }
 
         if ($request->submitted_by) {
@@ -71,8 +71,33 @@ class ProjectExpenseController extends Controller
             });
         }
 
-        $perPage = $request->get('per_page', 20);
-        $expenses = $query->latest()->paginate($perPage);
+        // Add sorting
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+        
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'amount', 'expense_date', 'title', 'status', 'project.title', 'submitter.name'];
+        if ($sortBy === 'project.title') {
+            $query->join('projects', 'project_expenses.project_id', '=', 'projects.id')
+                  ->orderBy('projects.title', $sortOrder)
+                  ->select('project_expenses.*');
+        } elseif ($sortBy === 'submitter.name') {
+            $query->join('users', 'project_expenses.submitted_by', '=', 'users.id')
+                  ->orderBy('users.name', $sortOrder)
+                  ->select('project_expenses.*');
+        } elseif (in_array($sortBy, $allowedSortFields)) {
+            $query->orderBy($sortBy, $sortOrder);
+        } else {
+            $query->latest();
+        }
+
+        $perPage = $request->get('per_page', 12);
+        $expenses = $query->paginate($perPage);
+
+        // expense.submitter.avatar
+        $expenses->each(function ($expense) {
+            $expense->submitter->avatar = check_file($expense->submitter->avatar) ? get_file($expense->submitter->avatar) : get_file('avatars/avatar.png');
+        });
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
@@ -109,7 +134,7 @@ class ProjectExpenseController extends Controller
             'projects' => $projects,
             'categories' => $categories,
             'members' => $members,
-            'filters' => $request->only(['project_id', 'category_id', 'status', 'submitted_by', 'search', 'per_page']),
+            'filters' => $request->only(['project_id', 'category_id', 'status', 'submitted_by', 'search', 'per_page', 'sort_by', 'sort_order', 'view']),
             'project_name' => $request->project_name,
             'userWorkspaceRole' => $userWorkspaceRole,
             'permissions' => [
@@ -138,8 +163,25 @@ class ProjectExpenseController extends Controller
             'approvals.approver'
         ]);
 
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        $projectsQuery = Project::with(['budget.categories'])->forWorkspace($workspace->id);
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+
+        if (in_array($userWorkspaceRole, ['member', 'manager'])) {
+            $projectsQuery->where(function ($q) use ($user) {
+                $q->whereHas('members', function ($memberQuery) use ($user) {
+                    $memberQuery->where('user_id', $user->id);
+                })->orWhere('created_by', $user->id);
+            });
+        }
+
+        $projects = $projectsQuery->get();
+
         return Inertia::render('expenses/Show', [
             'expense' => $expense,
+            'projects' => $projects,
             'permissions' => [
                 'update' => $this->checkPermission('expense_update'),
                 'delete' => $this->checkPermission('expense_delete'),

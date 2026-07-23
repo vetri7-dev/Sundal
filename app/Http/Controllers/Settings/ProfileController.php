@@ -35,9 +35,32 @@ class ProfileController extends Controller
         // Remove _method from validated data if present
         unset($validated['_method']);
         
-        // Handle avatar URL from MediaPicker
-        if ($request->has('avatar') && !empty($request->avatar)) {
-            $validated['avatar'] = $request->avatar;
+        // Remove avatar from validated data if no file is uploaded
+        // This prevents setting avatar to null in the database
+        if (!$request->hasFile('avatar')) {
+            unset($validated['avatar']);
+        }
+        
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            // Delete old avatar if exists
+            if ($request->user()->avatar && check_file($request->user()->avatar)) {
+                delete_file($request->user()->avatar);
+            }
+            
+            $filenameWithExt = $request->file('avatar')->getClientOriginalName();
+            $filename = pathinfo($filenameWithExt, PATHINFO_FILENAME);
+            $extension = $request->file('avatar')->getClientOriginalExtension();
+            $fileNameToStore = $filename . '_' . time() . '.' . $extension;
+
+            $upload = upload_file($request, 'avatar', $fileNameToStore, 'avatars');
+            if ($upload['status'] == true) {
+                $validated['avatar'] = $upload['url'];
+            } else {
+                return redirect()->back()
+                    ->withErrors(['avatar' => $upload['msg']])
+                    ->withInput();
+            }
         }
         
         $request->user()->fill($validated);

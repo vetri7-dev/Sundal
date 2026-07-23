@@ -356,4 +356,112 @@ class ToyyibPayPaymentController extends Controller
             return response('ERROR', 500);
         }
     }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            
+            if (!isset($settings['is_toyyibpay_enabled']) || $settings['is_toyyibpay_enabled'] !== '1') {
+                return response()->json(['error' => 'ToyyibPay not enabled'], 400);
+            }
+
+            if (!isset($settings['toyyibpay_secret_key'])) {
+                return response()->json(['error' => 'ToyyibPay not configured'], 400);
+            }
+
+            $paymentId = 'inv_' . $invoice->id . '_' . time() . '_' . uniqid();
+
+            $billData = [
+                'userSecretKey' => $settings['toyyibpay_secret_key'],
+                'categoryCode' => $settings['toyyibpay_category_code'] ?? '',
+                'billName' => 'Invoice #' . $invoice->invoice_number,
+                'billDescription' => 'Payment for Invoice #' . $invoice->invoice_number,
+                'billPriceSetting' => 1,
+                'billPayorInfo' => 1,
+                'billAmount' => intval($request->amount * 100),
+                'billReturnUrl' => route('toyyibpay.invoice.success.link', [
+                    'token' => $token,
+                    'amount' => $request->amount
+                ]),
+                'billCallbackUrl' => route('toyyibpay.invoice.callback'),
+                'billExternalReferenceNo' => $paymentId,
+                'billTo' => 'Customer',
+                'billEmail' => 'customer@example.com',
+                'billPhone' => $this->formatPhoneNumber('123456789'),
+                'billSplitPayment' => 0,
+                'billPaymentChannel' => '0',
+                'billContentEmail' => 'Thank you for your payment!',
+                'billChargeToCustomer' => 1,
+                'billExpiryDate' => date('d-m-Y', strtotime('+3 days')),
+                'billExpiryDays' => 3
+            ];
+
+            $curl = curl_init();
+            curl_setopt($curl, CURLOPT_POST, 1);
+            curl_setopt($curl, CURLOPT_URL, 'https://toyyibpay.com/index.php/api/createBill');
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $billData);
+            curl_setopt($curl, CURLOPT_TIMEOUT, 30);
+
+            $result = curl_exec($curl);
+            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            curl_close($curl);
+
+            if ($httpCode !== 200) {
+                return response()->json(['error' => 'ToyyibPay API connection failed'], 400);
+            }
+
+            $responseData = json_decode($result, true);
+
+            if (isset($responseData[0]['BillCode'])) {
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => 'https://toyyibpay.com/' . $responseData[0]['BillCode']
+                ]);
+            }
+
+            $errorMsg = $responseData[0]['msg'] ?? 'Failed to create payment bill';
+            return response()->json(['error' => $errorMsg], 400);
+            
+        } catch (ValidationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Payment processing failed. Please try again.'], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $amount = $request->input('amount');
+            $status_id = $request->input('status_id');
+            $order_id = $request->input('order_id');
+            
+            if ($status_id == '1' && $amount) {
+                $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+                
+                $invoice->createPaymentRecord(
+                    $amount,
+                    'toyyibpay',
+                    $order_id ?: 'toyyibpay_' . time()
+                );
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+            
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
+        }
+    }
 }

@@ -33,15 +33,74 @@ class PlanRequestController extends BaseController
 
         // Apply filters
         if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $query->where('plan_requests.status', $request->status);
+        }
+
+        // Apply sorting
+        $sortField = $request->get('sort_field');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        // Only apply sorting if sort_field is explicitly provided
+        if ($sortField) {
+            // Validate sort direction
+            if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
+                $sortDirection = 'desc';
+            }
+            
+            // Handle nested relationship sorting
+            switch ($sortField) {
+                case 'user.name':
+                    $query->join('users', 'plan_requests.user_id', '=', 'users.id')
+                          ->orderBy('users.name', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'user.email':
+                    $query->join('users', 'plan_requests.user_id', '=', 'users.id')
+                          ->orderBy('users.email', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'plan.name':
+                    $query->join('plans', 'plan_requests.plan_id', '=', 'plans.id')
+                          ->orderBy('plans.name', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'created_at':
+                case 'status':
+                    $query->orderBy($sortField, $sortDirection);
+                    break;
+                default:
+                    // Invalid sort field, use default
+                    $query->orderBy('created_at', 'desc');
+                    $sortField = null;
+                    $sortDirection = null;
+                    break;
+            }
+        } else {
+            // Default sorting when no sort is specified
+            $query->orderBy('created_at', 'desc');
+            // Don't set sortField and sortDirection in response when using default
+            $sortField = null;
+            $sortDirection = null;
         }
 
         $perPage = $request->get('per_page', 10);
-        $planRequests = $query->latest()->paginate($perPage);
+        $planRequests = $query->paginate($perPage);
+
+        $planRequests->getCollection()->transform(function ($planRequest) {
+            if ($planRequest->user) {
+                $planRequest->user->avatar = check_file($planRequest->user->avatar)
+                    ? get_file($planRequest->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $planRequest;
+        });
 
         return Inertia::render('plans/plan-request', [
             'planRequests' => $planRequests,
-            'filters' => $request->only(['search', 'status', 'per_page'])
+            'filters' => $request->only(['search', 'status', 'per_page']) + [
+                'sort_field' => $sortField,
+                'sort_direction' => $sortDirection
+            ]
         ]);
     }
 
@@ -105,15 +164,68 @@ class PlanRequestController extends BaseController
 
         // Apply filters
         if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+            $query->where('plan_requests.status', $request->status);
+        }
+
+        // Apply sorting
+        $sortField = $request->get('sort_field');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        if ($sortField) {
+            if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
+                $sortDirection = 'desc';
+            }
+            
+            switch ($sortField) {
+                case 'user.name':
+                    $query->join('users', 'plan_requests.user_id', '=', 'users.id')
+                          ->orderBy('users.name', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'user.email':
+                    $query->join('users', 'plan_requests.user_id', '=', 'users.id')
+                          ->orderBy('users.email', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'plan.name':
+                    $query->join('plans', 'plan_requests.plan_id', '=', 'plans.id')
+                          ->orderBy('plans.name', $sortDirection)
+                          ->select('plan_requests.*');
+                    break;
+                case 'created_at':
+                case 'status':
+                    $query->orderBy($sortField, $sortDirection);
+                    break;
+                default:
+                    $query->orderBy('created_at', 'desc');
+                    $sortField = null;
+                    $sortDirection = null;
+                    break;
+            }
+        } else {
+            $query->orderBy('created_at', 'desc');
+            $sortField = null;
+            $sortDirection = null;
         }
 
         $perPage = $request->get('per_page', 10);
-        $planRequests = $query->latest()->paginate($perPage);
+        $planRequests = $query->paginate($perPage);
+
+        $planRequests->getCollection()->transform(function ($planRequest) {
+            if ($planRequest->user) {
+                $planRequest->user->avatar = check_file($planRequest->user->avatar)
+                    ? get_file($planRequest->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $planRequest;
+        });
 
         return Inertia::render('plans/plan-request', [
             'planRequests' => $planRequests,
-            'filters' => $request->only(['search', 'status', 'per_page']),
+            'filters' => $request->only(['search', 'status', 'per_page']) + [
+                'sort_field' => $sortField,
+                'sort_direction' => $sortDirection
+            ],
             'isMyRequests' => true
         ]);
     }

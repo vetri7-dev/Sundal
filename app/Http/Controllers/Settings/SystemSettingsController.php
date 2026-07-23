@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Services\StorageConfigService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
 
 class SystemSettingsController extends Controller
 {
@@ -27,23 +28,32 @@ class SystemSettingsController extends Controller
     public function update(Request $request)
     {
         try {
-            $validated = $request->validate([
-                'defaultLanguage' => 'required|string',
-                'dateFormat' => 'required|string',
-                'timeFormat' => 'required|string',
-                'calendarStartDay' => 'required|string',
-                'defaultTimezone' => 'required|string',
-                'emailVerification' => 'boolean',
-                'landingPageEnabled' => 'boolean',
-            ]);
-
             $user = auth()->user();
-            $workspaceId = null;
-            
-            if ($user->type === 'company') {
-                $workspaceId = $user->current_workspace_id;
-            }   
-            
+            $isSaasCompany = isSaasMode() && $user->type === 'company';
+
+            // SaaS company users can only update limited fields
+            if ($isSaasCompany) {
+                $validated = $request->validate([
+                    'defaultLanguage' => 'required|string',
+                    'dateFormat'      => 'required|string',
+                    'timeFormat'      => 'required|string',
+                ]);
+            } else {
+                $validated = $request->validate([
+                    'defaultLanguage'   => 'required|string',
+                    'dateFormat'        => 'required|string',
+                    'timeFormat'        => 'required|string',
+                    'calendarStartDay'  => 'required|string',
+                    'defaultTimezone'   => 'required|string',
+                    'emailVerification' => 'boolean',
+                    'landingPageEnabled'=> 'boolean',
+                    'registrationEnabled' => 'boolean',
+                    'termsConditionsUrl'  => 'nullable|url',
+                ]);
+            }
+
+            $workspaceId = ($user->type === 'company') ? $user->current_workspace_id : null;
+
             foreach ($validated as $key => $value) {
                 $convertedValue = is_bool($value) ? ($value ? '1' : '0') : $value;
                 updateSetting($key, $convertedValue, $user->id, $workspaceId);
@@ -54,7 +64,7 @@ class SystemSettingsController extends Controller
             return redirect()->back()->with('error', __('Failed to update system settings: :error', ['error' => $e->getMessage()]));
         }
     }
-    
+
     /**
      * Update the brand settings.
      *
@@ -84,28 +94,34 @@ class SystemSettingsController extends Controller
                 // Demo mode: store ONLY theme settings in cookies (exclude logos and text)
                 $themeOnlySettings = [
                     'themeColor' => $validated['settings']['themeColor'] ?? 'green',
-                    'customColor' => $validated['settings']['customColor'] ?? '#10b981',
+                    'customColor' => $validated['settings']['customColor'] ?? '#10B77F',
                     'sidebarVariant' => $validated['settings']['sidebarVariant'] ?? 'inset',
                     'sidebarStyle' => $validated['settings']['sidebarStyle'] ?? 'plain',
                     'layoutDirection' => $validated['settings']['layoutDirection'] ?? 'left',
                     'themeMode' => $validated['settings']['themeMode'] ?? 'light',
                 ];
                 // Store as single cookie that frontend expects
-                cookie()->queue(cookie('brandSettings', json_encode($themeOnlySettings), 60 * 24 * 30)); // 30 days
-                
+                cookie()->queue(cookie('brandSettings', json_encode($themeOnlySettings), 60 * 24 * 30));
+                cookie()->queue(cookie('layoutDirection', $validated['settings']['layoutDirection'] ?? 'left', 60 * 24 * 30));
+
                 return redirect()->back()->with('success', __('Theme settings saved successfully!'));
             } else {
                 // Normal mode: store ONLY in database (no cookies)
                 $user = auth()->user();
                 $workspaceId = null;
-                
+
+                // For superadmin, workspace_id is always null
+                // For company users, use current workspace
                 if ($user->type === 'company') {
                     $workspaceId = $user->current_workspace_id;
+                } else if ($user->type === 'superadmin') {
+                    $workspaceId = null;
                 }
-                
+
                 foreach ($validated['settings'] as $key => $value) {
                     updateSetting($key, $value, $user->id, $workspaceId);
                 }
+
                 return redirect()->back()->with('success', __('Brand settings updated successfully.'));
             }
         } catch (\Exception $e) {
@@ -128,14 +144,14 @@ class SystemSettingsController extends Controller
                 'recaptchaSiteKey' => 'required|string',
                 'recaptchaSecretKey' => 'required|string',
             ]);
-            
+
             $user = auth()->user();
             $workspaceId = null;
-            
+
             if ($user->type === 'company') {
                 $workspaceId = $user->current_workspace_id;
             }
-            
+
             foreach ($validated as $key => $value) {
                 $convertedValue = is_bool($value) ? ($value ? '1' : '0') : $value;
                 updateSetting($key, $convertedValue, $user->id, $workspaceId, isSaasMode() ? false: true);
@@ -160,14 +176,14 @@ class SystemSettingsController extends Controller
                 'chatgptKey' => 'required|string',
                 'chatgptModel' => 'required|string',
             ]);
-            
+
             $user = auth()->user();
             $workspaceId = null;
-            
+
             if ($user->type === 'company') {
                 $workspaceId = $user->current_workspace_id;
             }
-            
+
             foreach ($validated as $key => $value) {
                 updateSetting($key, $value, $user->id, $workspaceId);
             }
@@ -228,14 +244,14 @@ class SystemSettingsController extends Controller
                 $settings['wasabi_url'] = $validated['wasabiUrl'];
                 $settings['wasabi_root'] = $validated['wasabiRoot'];
             }
-            
+
             $user = auth()->user();
             $workspaceId = null;
-            
+
             if ($user->type === 'company') {
                 $workspaceId = $user->current_workspace_id;
             }
-            
+
             foreach ($settings as $key => $value) {
                 updateSetting($key, $value, $user->id, $workspaceId);
             }
@@ -267,14 +283,14 @@ class SystemSettingsController extends Controller
                 'contactUsDescription' => 'required|string',
                 'contactUsUrl' => 'required|url',
             ]);
-            
+
             $user = auth()->user();
             $workspaceId = null;
-            
+
             if ($user->type === 'company') {
                 $workspaceId = $user->current_workspace_id;
             }
-            
+
             foreach ($validated as $key => $value) {
                 updateSetting($key, is_bool($value) ? ($value ? '1' : '0') : $value, $user->id, $workspaceId, isSaasMode() ? false: true);
             }
@@ -358,21 +374,38 @@ class SystemSettingsController extends Controller
     public function updateSeo(Request $request)
     {
         try {
-            $validated = $request->validate([
-                'metaKeywords' => 'required|string|max:255',
-                'metaDescription' => 'required|string|max:160',
-                'metaImage' => 'required|string',
-            ]);
-            
             $user = auth()->user();
             $workspaceId = null;
-            
+
             if ($user->type === 'company') {
                 $workspaceId = $user->current_workspace_id;
             }
-            
-            foreach ($validated as $key => $value) {
-                updateSetting($key, $value, $user->id, $workspaceId, isSaasMode() ? false: true);
+
+            // Check if image already exists
+            $existingImage = getSetting('metaImage', '', $user->id, $workspaceId);
+
+            $validated = $request->validate([
+                'metaKeywords' => 'required|string|max:255',
+                'metaDescription' => 'required|string|max:160',
+                'metaImage' => 'nullable',
+            ]);
+
+            updateSetting('metaKeywords', $validated['metaKeywords'], $user->id, $workspaceId, isSaasMode() ? false: true);
+            updateSetting('metaDescription', $validated['metaDescription'], $user->id, $workspaceId, isSaasMode() ? false: true);
+
+            if ($request->hasFile('metaImage')) {
+                if ($existingImage && $existingImage !== 'seo/seo-banner.jpg') {
+                    delete_file($existingImage);
+                }
+
+                $fileName = 'meta_image_' . time() . '.' . $request->file('metaImage')->getClientOriginalExtension();
+                $uploadResult = upload_file($request, 'metaImage', $fileName, 'seo');
+
+                if (!$uploadResult['status']) {
+                    return redirect()->back()->with('error', $uploadResult['msg']);
+                }
+
+                updateSetting('metaImage', $uploadResult['url'], $user->id, $workspaceId, isSaasMode() ? false: true);
             }
 
             return redirect()->back()->with('success', __('SEO settings updated successfully.'));
@@ -406,12 +439,14 @@ class SystemSettingsController extends Controller
     public function getEmailNotifications()
     {
         $userId = auth()->id();
+        $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
         $templates = \App\Models\EmailTemplate::select('id', 'name')->get();
         $settings = [];
 
         foreach ($templates as $template) {
             $userTemplate = \App\Models\UserEmailTemplate::where('user_id', $userId)
                 ->where('template_id', $template->id)
+                ->where('workspace_id', $workspaceId)
                 ->first();
 
             $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
@@ -445,6 +480,7 @@ class SystemSettingsController extends Controller
     {
         try {
             $userId = auth()->id();
+            $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
             $availableTemplates = \App\Models\EmailTemplate::pluck('name', 'id')->toArray();
 
             $rules = [];
@@ -457,7 +493,7 @@ class SystemSettingsController extends Controller
             foreach ($availableTemplates as $templateId => $templateName) {
                 if (isset($validated[$templateName])) {
                     \App\Models\UserEmailTemplate::updateOrCreate(
-                        ['user_id' => $userId, 'template_id' => $templateId],
+                        ['user_id' => $userId, 'template_id' => $templateId, 'workspace_id' => $workspaceId],
                         ['is_active' => $validated[$templateName]]
                     );
                 }
@@ -468,4 +504,289 @@ class SystemSettingsController extends Controller
             return redirect()->back()->with('error', __('Failed to update email notification settings: :error', ['error' => $e->getMessage()]));
         }
     }
-}   
+
+    /**
+     * Get available Slack notifications.
+     */
+    public function getAvailableSlackNotifications()
+    {
+        $templates = \App\Models\NotificationTemplate::where('type', 'slack')
+            ->select(['id', 'name'])->get();
+        $notifications = [];
+
+        foreach ($templates as $template) {
+            $notifications[] = [
+                'name' => $template->name,
+                'label' => $template->name
+            ];
+        }
+
+        return response()->json($notifications);
+    }
+
+    /**
+     * Get Slack configuration.
+     */
+    public function getSlackConfig()
+    {
+        $userId = createdBy();
+        return response()->json([
+            'slack_enabled' => getSetting('slack_enabled', '0', $userId) === '1',
+            'slack_webhook_url' => getSetting('slack_webhook_url', '', $userId)
+        ]);
+    }
+
+    /**
+     * Update Slack notification settings.
+     */
+    public function updateSlackNotifications(Request $request)
+    {
+        try {
+            $userId = createdBy();
+            $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
+            $availableTemplates = \App\Models\NotificationTemplate::where('type', 'slack')
+                ->pluck('name', 'id')->toArray();
+
+            $rules = [
+                'slack_enabled' => 'boolean',
+                'slack_webhook_url' => 'nullable|url'
+            ];
+
+            foreach ($availableTemplates as $templateId => $templateName) {
+                $rules[$templateName] = 'boolean';
+            }
+
+            $validated = $request->validate($rules);
+
+            // Update Slack configuration
+            updateSetting('slack_enabled', $validated['slack_enabled'] ? '1' : '0', $userId);
+            updateSetting('slack_webhook_url', $validated['slack_webhook_url'] ?? '', $userId);
+
+            // Update notification settings
+            foreach ($availableTemplates as $templateId => $templateName) {
+                if (isset($validated[$templateName])) {
+                    \App\Models\UserNotificationTemplate::updateOrCreate(
+                        [
+                            'user_id' => $userId,
+                            'template_id' => $templateId,
+                            'type' => 'slack'
+                        ],
+                        [
+                            'workspace_id' => $workspaceId,
+                            'is_active' => $validated[$templateName]
+                        ]
+                    );
+                }
+            }
+
+            return redirect()->back()->with('success', __('Slack settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update Slack settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Get Slack notifications.
+     */
+    public function getSlackNotifications()
+    {
+        $userId = createdBy();
+        $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
+        $templates = \App\Models\NotificationTemplate::where('type', 'slack')
+            ->select(['id', 'name'])->get();
+        $settings = [];
+
+        foreach ($templates as $template) {
+            $userTemplate = \App\Models\UserNotificationTemplate::where('user_id', $userId)
+                ->where('template_id', $template->id)
+                ->where('type', 'slack')
+                ->where('workspace_id', $workspaceId)
+                ->first();
+
+            $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
+        }
+
+        return response()->json($settings);
+    }
+
+    /**
+     * Get available Telegram notifications.
+     */
+    public function getAvailableTelegramNotifications()
+    {
+        $templates = \App\Models\NotificationTemplate::where('type', 'telegram')
+            ->select(['id', 'name'])->get();
+        $notifications = [];
+
+        foreach ($templates as $template) {
+            $notifications[] = [
+                'name' => $template->name,
+                'label' => $template->name
+            ];
+        }
+
+        return response()->json($notifications);
+    }
+
+    /**
+     * Get Telegram notifications.
+     */
+    public function getTelegramNotifications()
+    {
+        $userId = createdBy();
+        $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
+        $templates = \App\Models\NotificationTemplate::where('type', 'telegram')
+            ->select(['id', 'name'])->get();
+        $settings = [];
+
+        foreach ($templates as $template) {
+            $userTemplate = \App\Models\UserNotificationTemplate::where('user_id', $userId)
+                ->where('template_id', $template->id)
+                ->where('type', 'telegram')
+                ->where('workspace_id', $workspaceId)
+                ->first();
+
+            $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
+        }
+
+        return response()->json($settings);
+    }
+
+    /**
+     * Get Telegram configuration.
+     */
+    public function getTelegramConfig()
+    {
+        $userId = createdBy();
+        return response()->json([
+            'telegram_enabled' => getSetting('telegram_enabled', '0', $userId) === '1',
+            'telegram_bot_token' => getSetting('telegram_bot_token', '', $userId),
+            'telegram_chat_id' => getSetting('telegram_chat_id', '', $userId)
+        ]);
+    }
+
+    /**
+     * Update Telegram notification settings.
+     */
+    public function updateTelegramNotifications(Request $request)
+    {
+        try {
+            $userId = createdBy();
+            $workspaceId = auth()->user()->type === 'company' ? auth()->user()->current_workspace_id : null;
+            $availableTemplates = \App\Models\NotificationTemplate::where('type', 'telegram')
+                ->pluck('name', 'id')->toArray();
+
+            $rules = [
+                'telegram_enabled' => 'boolean',
+                'telegram_bot_token' => 'nullable|string',
+                'telegram_chat_id' => 'nullable|string'
+            ];
+
+            foreach ($availableTemplates as $templateId => $templateName) {
+                $rules[$templateName] = 'boolean';
+            }
+
+            $validated = $request->validate($rules);
+
+            // Update Telegram configuration
+            updateSetting('telegram_enabled', $validated['telegram_enabled'] ? '1' : '0', $userId);
+            updateSetting('telegram_bot_token', $validated['telegram_bot_token'] ?? '', $userId);
+            updateSetting('telegram_chat_id', $validated['telegram_chat_id'] ?? '', $userId);
+
+            // Update notification settings
+            foreach ($availableTemplates as $templateId => $templateName) {
+                if (isset($validated[$templateName])) {
+                    \App\Models\UserNotificationTemplate::updateOrCreate(
+                        [
+                            'user_id' => $userId,
+                            'template_id' => $templateId,
+                            'type' => 'telegram'
+                        ],
+                        [
+                            'workspace_id' => $workspaceId,
+                            'is_active' => $validated[$templateName]
+                        ]
+                    );
+                }
+            }
+
+            return redirect()->back()->with('success', __('Telegram settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update Telegram settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Test Slack webhook.
+     */
+    public function testSlackWebhook(Request $request)
+    {
+        $request->validate([
+            'webhook_url' => 'required|url',
+        ]);
+
+        $message = [
+            'text' => 'Test message from Taskly SaaS',
+            'username' => 'Taskly Bot',
+            'icon_emoji' => ':robot_face:',
+        ];
+
+        try {
+            $response = Http::post($request->webhook_url, $message);
+
+            if ($response->successful()) {
+                return back();
+            }
+
+            return back()->withErrors(['webhook' => 'Failed to send test message']);
+        } catch (\Exception $e) {
+            return back()->withErrors(['webhook' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Test Telegram bot.
+     */
+    public function testTelegramBot(Request $request)
+    {
+        $request->validate([
+            'bot_token' => 'required|string',
+            'chat_id' => 'required|string'
+        ]);
+
+        try {
+            $botToken = $request->bot_token;
+            $chatId = $request->chat_id;
+
+            // Send test message to Telegram
+            $message = 'Test message from Taskly - Telegram integration is working!';
+            $url = "https://api.telegram.org/bot{$botToken}/sendMessage";
+
+            $data = [
+                'chat_id' => $chatId,
+                'text' => $message
+            ];
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200) {
+                $response = json_decode($result, true);
+                if (isset($response['ok']) && $response['ok']) {
+                    return redirect()->back()->with('success', __('Test message sent successfully to Telegram!'));
+                }
+            }
+
+            return redirect()->back()->with('error', __('Failed to send test message. Please check your bot token and chat ID.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to send test message: :message', ['message' => $e->getMessage()]));
+        }
+    }
+}

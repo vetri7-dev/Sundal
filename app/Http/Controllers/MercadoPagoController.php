@@ -24,15 +24,13 @@ class MercadoPagoController extends Controller
      */
     private function getMercadoPagoCredentials()
     {
-         $settings = getPaymentGatewaySettings();
-        $paymentSettings = $settings['payment_settings'];
-        $generalSettings = $settings['general_settings'];
+        $superAdmin = User::where('type', 'superadmin')->first();
+        $settings = getPaymentMethodConfig('mercadopago', $superAdmin->id);
         
-        $accessToken = $paymentSettings['mercadopago_access_token'] ?? null;
         return [
-            'access_token' => $accessToken,
-            'mode' => $paymentSettings['mercadopago_mode'] ?? 'sandbox',
-            'currency' => $generalSettings['defaultCurrency'] ?? 'BRL'
+            'access_token' => $settings['access_token'] ?? null,
+            'mode' => $settings['mode'] ?? 'sandbox',
+            'currency' => $settings['currency'] ?? 'USD'
         ];
     }
 
@@ -487,6 +485,84 @@ class MercadoPagoController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['error' => $e->getMessage()], 500);
             }
+            return back()->withErrors(['error' => 'Payment processing failed: ' . $e->getMessage()]);
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = Invoice::where('payment_token', $token)->firstOrFail();
+            $amount = $request->amount;
+            
+            // Get MercadoPago credentials for invoice creator
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            $accessToken = $settings['mercadopago_access_token'] ?? null;
+            $mode = $settings['mercadopago_mode'] ?? 'sandbox';
+            
+            if (!$accessToken) {
+                return back()->withErrors(['error' => 'MercadoPago API credentials not found']);
+            }
+            
+            // Initialize MercadoPago SDK
+            SDK::setAccessToken($accessToken);
+            SDK::setIntegratorId("dev_taskly");
+            
+            // Create preference
+            $preference = new Preference();
+            
+            // Create item with required fields
+            $item = new Item();
+            $item->title = 'Invoice #' . $invoice->invoice_number;
+            $item->quantity = 1;
+            $item->unit_price = (float) $amount;
+            $item->currency_id = 'USD';
+            $item->id = 'invoice_' . $invoice->id;
+            
+            $preference->items = [$item];
+            
+            // Set back URLs
+            $preference->back_urls = [
+                "success" => route('invoices.payment', $invoice->payment_token) . '?payment_status=success&message=' . urlencode('Payment processed successfully.'),
+                "failure" => route('invoices.payment', $invoice->payment_token) . '?payment_status=error&message=' . urlencode('Payment failed. Please try again.'),
+                "pending" => route('invoices.payment', $invoice->payment_token) . '?payment_status=pending&message=' . urlencode('Payment is pending confirmation.')
+            ];
+            
+            // Set external reference
+            $preference->external_reference = 'invoice_' . $invoice->id . '_' . time();
+            
+            // Set notification URL
+            $preference->notification_url = route('mercadopago.webhook');
+            
+            // Set additional required fields
+            $preference->binary_mode = true;
+            
+            // Save preference
+            $result = $preference->save();
+            
+            if (!$result || !$preference->id) {
+                return back()->withErrors(['error' => 'Failed to create MercadoPago preference']);
+            }
+            
+            // Determine redirect URL based on mode
+            $redirectUrl = $mode === 'sandbox' ? $preference->sandbox_init_point : $preference->init_point;
+            
+            if (!$redirectUrl) {
+                return back()->withErrors(['error' => 'MercadoPago redirect URL is not available']);
+            }
+            
+            // Redirect to MercadoPago
+            return redirect($redirectUrl);
+            
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return back()->withErrors(['error' => 'Invoice not found. Please check the link and try again.']);
+        } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Payment processing failed: ' . $e->getMessage()]);
         }
     }

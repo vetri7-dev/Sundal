@@ -7,6 +7,7 @@ use App\Models\Workspace;
 use App\Models\Plan;
 use App\Models\Project;
 use App\Models\WorkspaceMember;
+use Illuminate\Support\Facades\DB;
 
 class PlanLimitService
 {
@@ -224,9 +225,21 @@ class PlanLimitService
         if (!$this->isSaasMode()) {
             return ['allowed' => true];
         }
+
+        // Superadmin has no plan restrictions
+        if ($user->isSuperAdmin()) {
+            return ['allowed' => true];
+        }
+
+        // Resolve company owner via current workspace owner (works for all roles: manager, member, client)
+        $companyOwner = $this->resolveCompanyOwner($user);
         
-        $plan = $user->getCurrentPlan();
-        
+        if (!$companyOwner) {
+            return ['allowed' => false, 'message' => __('No active plan found')];
+        }
+
+        $plan = $companyOwner->getCurrentPlan();
+
         if (!$plan) {
             return ['allowed' => false, 'message' => __('No active plan found')];
         }
@@ -236,7 +249,7 @@ class PlanLimitService
         }
 
         $maxStorageBytes = $plan->storage_limit * 1024 * 1024 * 1024; // Convert GB to bytes
-        $currentUsageBytes = $this->getTotalStorageUsage($user);
+        $currentUsageBytes = $this->getTotalStorageUsage($companyOwner);
         
         if (($currentUsageBytes + $fileSizeInBytes) > $maxStorageBytes) {
             $maxStorageGB = $plan->storage_limit;
@@ -246,7 +259,7 @@ class PlanLimitService
             return [
                 'allowed' => false,
                 'message' => __('Storage limit exceeded. Plan limit: :max_gb GB, Current usage: :current_gb GB, Upload size: :upload_mb MB', [
-                    'max_gb' => $maxStorageGB, 
+                    'max_gb' => $maxStorageGB,
                     'current_gb' => $currentUsageGB,
                     'upload_mb' => $uploadSizeMB
                 ])
@@ -257,13 +270,53 @@ class PlanLimitService
     }
     
     /**
-     * Get total storage usage for user
+     * Resolve the company owner for any user type.
+     * - company user  → themselves
+     * - member/manager/client → owner of their current workspace
+     * - fallback → created_by user
      */
-    private function getTotalStorageUsage(User $user): int
+    private function resolveCompanyOwner(User $user): ?User
     {
-        // Get all media files uploaded by this user
-        $totalSize = \Spatie\MediaLibrary\MediaCollections\Models\Media::where('user_id', $user->id)->sum('size');
-        
+        if ($user->isSuperAdmin()) {
+            return $user;
+        }
+
+        // if ($user->type === 'company') {
+        //     return $user;
+        // }
+
+        // Resolve via current workspace owner (handles invited members who have no created_by)
+        if ($user->current_workspace_id) {
+            $workspace = Workspace::find($user->current_workspace_id);
+            if ($workspace && $workspace->owner) {
+                return $workspace->owner;
+            }
+        }
+
+        // Fallback: created_by (for users created directly under a company)
+        if ($user->created_by) {
+            return User::find($user->created_by);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get total storage usage for a company owner (includes all members in all owned workspaces)
+     */
+    private function getTotalStorageUsage(User $companyOwner): int
+    {
+        // Collect all user IDs across all workspaces owned by this company
+        $workspaceUserIds = \DB::table('workspace_members')
+            ->whereIn('workspace_id', $companyOwner->ownedWorkspaces()->pluck('id'))
+            ->where('status', 'active')
+            ->pluck('user_id')
+            ->push($companyOwner->id)
+            ->unique()
+            ->toArray();
+
+        $totalSize = \Spatie\MediaLibrary\MediaCollections\Models\Media::whereIn('user_id', $workspaceUserIds)->sum('size');
+
         return (int) $totalSize;
     }
 
@@ -293,6 +346,14 @@ class PlanLimitService
                 'unlimited' => !$plan->storage_limit
             ]
         ];
+
+        // Ensure storage usage reflects company-level (owner) context
+        if ($user->type !== 'company' && $user->created_by) {
+            $owner = User::find($user->created_by);
+            if ($owner) {
+                $usage['storage']['current_gb'] = round($this->getTotalStorageUsage($owner) / (1024 * 1024 * 1024), 3);
+            }
+        }
 
         // Add workspace-specific usage
         foreach ($workspaces as $workspace) {

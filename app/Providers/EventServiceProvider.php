@@ -20,13 +20,25 @@ use App\Events\InvoiceStatusUpdated;
 use App\Events\UserInvited;
 use App\Events\ExpenseApprovalRequested;
 use App\Events\BudgetCreated;
+use App\Events\ContractCreated;
+use App\Events\ZoomMeetingCreated;
+use App\Events\GoogleMeetingCreated;
+use App\Events\TodoCreated;
+use App\Events\TodoStatusUpdated;
+use App\Events\TodoCommentAdded;
 use App\Listeners\SendUserCreatedEmail;
+use App\Listeners\SendContractCreatedEmail;
 use App\Listeners\SendWorkspaceInvitationEmail;
 use App\Listeners\SendProjectAssignmentEmail;
 use App\Listeners\SendTaskAssignmentEmail;
 use App\Listeners\SendBugAssignmentEmail;
 use App\Listeners\SendExpenseNotificationEmail;
 use App\Listeners\SendInvoiceNotificationEmail;
+use App\Listeners\SendZoomMeetingNotificationEmail;
+use App\Listeners\SendGoogleMeetingNotificationEmail;
+use App\Listeners\SendTodoCreatedEmail;
+use App\Listeners\SendTodoStatusUpdatedEmail;
+use App\Listeners\SendTodoCommentEmail;
 use App\Listeners\SendNewProjectSlackNotification;
 use App\Listeners\SendNewTaskSlackNotification;
 use App\Listeners\SendTaskStageUpdateSlackNotification;
@@ -127,6 +139,24 @@ class EventServiceProvider extends ServiceProvider
             SendNewBudgetTelegramNotification::class,
             WebhookBudgetCreateListener::class,
         ],
+        ContractCreated::class => [
+            SendContractCreatedEmail::class,
+        ],
+        ZoomMeetingCreated::class => [
+            SendZoomMeetingNotificationEmail::class,
+        ],
+        GoogleMeetingCreated::class => [
+            SendGoogleMeetingNotificationEmail::class,
+        ],
+        TodoCreated::class => [
+            SendTodoCreatedEmail::class,
+        ],
+        TodoStatusUpdated::class => [
+            SendTodoStatusUpdatedEmail::class,
+        ],
+        TodoCommentAdded::class => [
+            SendTodoCommentEmail::class,
+        ],
 
     ];
 
@@ -135,7 +165,8 @@ class EventServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Disable Laravel's event discovery.
+        $this->disableEventDiscovery();
     }
 
     /**

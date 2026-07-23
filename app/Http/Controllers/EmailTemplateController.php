@@ -119,6 +119,84 @@ class EmailTemplateController extends Controller
                 '{company_name}' => 'Company name',
                 '{app_name}' => 'Application name'
             ];
+        } elseif ($template->name === 'New Contract') {
+            $variables = [
+                '{client_name}' => 'Name of the client',
+                '{contract_id}' => 'Contract ID',
+                '{contract_subject}' => 'Contract subject',
+                '{contract_type}' => 'Contract type',
+                '{contract_description}' => 'Contract description',
+                '{contract_value}' => 'Contract value',
+                '{currency}' => 'Currency',
+                '{start_date}' => 'Contract start date',
+                '{end_date}' => 'Contract end date',
+                '{status}' => 'Contract status',
+                '{creator_name}' => 'Name of the contract creator',
+                '{app_name}' => 'Application name'
+            ];
+        } elseif ($template->name === 'Zoom Meeting Notification') {
+            $variables = [
+                '{member_name}' => 'Name of the meeting member',
+                '{meeting_title}' => 'Title of the meeting',
+                '{project_name}' => 'Name of the project',
+                '{start_time}' => 'Meeting start time',
+                '{duration}' => 'Meeting duration in minutes',
+                '{organizer_name}' => 'Name of the meeting organizer',
+                '{meeting_description}' => 'Meeting description',
+                '{join_url}' => 'Zoom meeting join URL',
+                '{app_name}' => 'Application name'
+            ];
+        } elseif ($template->name === 'Google Meeting Notification') {
+            $variables = [
+                '{member_name}' => 'Name of the meeting member',
+                '{meeting_title}' => 'Title of the meeting',
+                '{project_name}' => 'Name of the project',
+                '{start_time}' => 'Meeting start time',
+                '{duration}' => 'Meeting duration in minutes',
+                '{organizer_name}' => 'Name of the meeting organizer',
+                '{meeting_description}' => 'Meeting description',
+                '{join_url}' => 'Google Meet join URL',
+                '{app_name}' => 'Application name'
+            ];
+        } elseif ($template->name === 'Todo Created') {
+            $variables = [
+                '{todo_title}' => 'Title of the todo',
+                '{todo_description}' => 'Todo description',
+                '{todo_priority}' => 'Todo priority (Low/Medium/High)',
+                '{todo_status}' => 'Todo status (Pending/In Progress/Completed)',
+                '{due_date}' => 'Todo due date',
+                '{workspace_name}' => 'Name of the workspace',
+                '{created_by_name}' => 'Name of the person who created the todo',
+                '{member_name}' => 'Name of the member',
+                '{app_name}' => 'Application name',
+                '{app_url}' => 'Application URL'
+            ];
+        } elseif ($template->name === 'Todo Status Updated') {
+            $variables = [
+                '{todo_title}' => 'Title of the todo',
+                '{todo_description}' => 'Todo description',
+                '{todo_priority}' => 'Todo priority (Low/Medium/High)',
+                '{old_status}' => 'Previous status of the todo',
+                '{new_status}' => 'New status of the todo',
+                '{due_date}' => 'Todo due date',
+                '{workspace_name}' => 'Name of the workspace',
+                '{updated_by_name}' => 'Name of the person who updated the todo',
+                '{member_name}' => 'Name of the member',
+                '{app_name}' => 'Application name',
+                '{app_url}' => 'Application URL'
+            ];
+        } elseif ($template->name === 'Todo Comments Added') {
+            $variables = [
+                '{todo_title}' => 'Title of the todo',
+                '{todo_priority}' => 'Todo priority (Low/Medium/High)',
+                '{todo_status}' => 'Todo status (Pending/In Progress/Completed)',
+                '{due_date}' => 'Todo due date',
+                '{activity_type}' => 'Activity type (Comment/Attachment)',
+                '{workspace_name}' => 'Name of the workspace',
+                '{created_by_name}' => 'Name of the person who added comment/attachment',
+                '{member_name}' => 'Name of the member',
+                '{app_name}' => 'Application name'
+            ];
         }
 
         return Inertia::render('email-templates/show', [

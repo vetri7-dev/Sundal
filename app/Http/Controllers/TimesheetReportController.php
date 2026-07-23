@@ -21,11 +21,20 @@ class TimesheetReportController extends Controller
             $q->where('workspace_id', $workspace->id)->where('status', 'active');
         })->get();
 
+        $members->each(function ($member) {
+            $member->avatar = check_file($member->avatar) ? get_file($member->avatar) : get_file('avatars/avatar.png');
+        });
+
         $projects = Project::forWorkspace($workspace->id)->get();
 
         // Set default date range (last 30 days)
         $endDate = Carbon::now()->format('Y-m-d');
-        $startDate = Carbon::now()->subDays(30)->format('Y-m-d');
+        if(isDemo())
+        {
+            $startDate = Carbon::now()->subDays(100)->format('Y-m-d');
+        } else {
+            $startDate = Carbon::now()->subDays(30)->format('Y-m-d');
+        }
 
         // Generate default latest report (summary for last 30 days)
         $defaultQuery = TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
@@ -209,7 +218,7 @@ class TimesheetReportController extends Controller
                             'description' => $entry->description,
                             'is_billable' => $entry->is_billable
                         ];
-                    })
+                    }),
                 ];
             });
             
@@ -218,7 +227,8 @@ class TimesheetReportController extends Controller
                 'total_hours' => $userEntries->sum('hours'),
                 'billable_hours' => $userEntries->where('is_billable', true)->sum('hours'),
                 'total_amount' => $userEntries->sum(fn($entry) => $entry->hours * ($entry->hourly_rate ?? 0)),
-                'projects' => $projectData->values()
+                'projects' => $projectData->values(),
+                'avatar' => $user ? (check_file($user->avatar) ? get_file($user->avatar) : get_file('avatars/avatar.png')) : get_file('avatars/avatar.png')
             ];
         })->values();
     }

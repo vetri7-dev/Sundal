@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Filter, Search, Plus, Eye, Edit, Trash2, KeyRound, Lock, Unlock, LayoutGrid, List, ExternalLink, Info, ArrowUpRight, CreditCard } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
+import { Filter, Search, Plus, Eye, Edit, Trash2, KeyRound, Lock, Unlock, LayoutGrid, List, ExternalLink, Info, ArrowUpRight, CreditCard, Download, Upload, ChevronUp, ChevronDown, ChevronsUpDown, History } from 'lucide-react';
 import { toast } from '@/components/custom-toast';
 import { useInitials } from '@/hooks/use-initials';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { UpgradePlanModal } from '@/components/UpgradePlanModal';
+import { ImportModal } from '@/components/ImportModal';
+import ViewPopup from './view';
 
 export default function Companies() {
   const { t } = useTranslation();
@@ -25,18 +28,27 @@ export default function Companies() {
   const getInitials = useInitials();
   
   // State
-  const [activeView, setActiveView] = useState('list');
+  const [activeView, setActiveView] = useState(pageFilters.view || 'list');
   const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
   const [startDate, setStartDate] = useState<Date | undefined>(pageFilters.start_date ? new Date(pageFilters.start_date) : undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(pageFilters.end_date ? new Date(pageFilters.end_date) : undefined);
   const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
   const [showFilters, setShowFilters] = useState(false);
   
+  // Sync activeView with URL parameter when pageFilters change
+  useEffect(() => {
+    if (pageFilters.view && pageFilters.view !== activeView) {
+      setActiveView(pageFilters.view);
+    }
+  }, [pageFilters.view]);
+  
   // Modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
   const [isUpgradePlanModalOpen, setIsUpgradePlanModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [currentCompany, setCurrentCompany] = useState<any>(null);
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
@@ -70,7 +82,7 @@ export default function Companies() {
   };
   
   const applyFilters = () => {
-    const params: any = { page: 1 };
+    const params: any = { page: 1, view: activeView };
     
     if (searchTerm) {
       params.search = searchTerm;
@@ -96,10 +108,51 @@ export default function Companies() {
     router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
   };
   
+  const handleDateFilter = (type: 'start' | 'end', date: Date | undefined) => {
+    if (type === 'start') {
+      setStartDate(date);
+    } else {
+      setEndDate(date);
+    }
+    
+    const params: any = { page: 1, view: activeView };
+    
+    if (searchTerm) {
+      params.search = searchTerm;
+    }
+    
+    if (selectedStatus !== 'all') {
+      params.status = selectedStatus;
+    }
+    
+    if (type === 'start' && date) {
+      params.start_date = date.toISOString().split('T')[0];
+    } else if (type === 'start' && !date) {
+      // Remove start_date if date is cleared
+    } else if (startDate) {
+      params.start_date = startDate.toISOString().split('T')[0];
+    }
+    
+    if (type === 'end' && date) {
+      params.end_date = date.toISOString().split('T')[0];
+    } else if (type === 'end' && !date) {
+      // Remove end_date if date is cleared
+    } else if (endDate) {
+      params.end_date = endDate.toISOString().split('T')[0];
+    }
+    
+    // Add per_page if it exists
+    if (pageFilters.per_page) {
+      params.per_page = pageFilters.per_page;
+    }
+    
+    router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
+  };
+  
   const handleStatusFilter = (value: string) => {
     setSelectedStatus(value);
     
-    const params: any = { page: 1 };
+    const params: any = { page: 1, view: activeView };
     
     if (searchTerm) {
       params.search = searchTerm;
@@ -125,13 +178,28 @@ export default function Companies() {
     router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
   };
   
+  // Render sort icon function like in CrudTable
+  const renderSortIcon = (column: any) => {
+    if (!column.sortable) return null;
+
+    if (pageFilters.sort_field === column.key) {
+      return pageFilters.sort_direction === 'asc' ?
+        <ChevronUp className="ml-1 h-4 w-4" /> :
+        <ChevronDown className="ml-1 h-4 w-4" />;
+    }
+
+    // Always show the double arrow for sortable columns when not sorted
+    return <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />;
+  };
+  
   const handleSort = (field: string) => {
     const direction = pageFilters.sort_field === field && pageFilters.sort_direction === 'asc' ? 'desc' : 'asc';
     
     const params: any = { 
       sort_field: field, 
       sort_direction: direction, 
-      page: 1 
+      page: 1,
+      view: activeView
     };
     
     // Add search and filters
@@ -167,8 +235,7 @@ export default function Companies() {
         router.get(route("impersonate.start", company.id));
         break;
       case 'company-info':
-        setFormMode('view');
-        setIsFormModalOpen(true);
+        setIsViewModalOpen(true);
         break;
       case 'upgrade-plan':
         handleUpgradePlan(company);
@@ -215,9 +282,9 @@ export default function Companies() {
         onSuccess: () => {
           setIsFormModalOpen(false);
           toast.dismiss();
-          if (flash?.success) {
-            toast.success(flash.success);
-          }
+          // if (flash?.success) {
+          //   toast.success(flash.success);
+          // }
         },
         onError: (errors) => {
           toast.dismiss();
@@ -325,7 +392,8 @@ export default function Companies() {
     
     router.get(route('companies.index'), { 
       page: 1, 
-      per_page: pageFilters.per_page 
+      per_page: pageFilters.per_page,
+      view: activeView
     }, { preserveState: true, preserveScroll: true });
   };
   
@@ -339,6 +407,8 @@ export default function Companies() {
       .then(res => res.json())
       .then(data => {
         setAvailablePlans(data.plans);
+        // Merge company details (including current_plan_duration) into currentCompany
+        setCurrentCompany((prev: any) => ({ ...prev, ...data.company }));
         setIsUpgradePlanModalOpen(true);
         toast.dismiss();
       })
@@ -348,12 +418,13 @@ export default function Companies() {
       });
   };
   
-  const handleUpgradePlanConfirm = (planId: number) => {
+  const handleUpgradePlanConfirm = (planId: number, duration: string) => {
     toast.loading(t('Upgrading plan...'));
     
     // Use Inertia router to handle the request
     router.put(route('companies.upgrade-plan', currentCompany.id), { 
-      plan_id: planId 
+      plan_id: planId,
+      duration: duration
     }, {
       onSuccess: () => {
         setIsUpgradePlanModalOpen(false);
@@ -382,10 +453,46 @@ export default function Companies() {
   // Define page actions
   const pageActions = [
     {
-      label: t('User Logs History'),
-      icon: <Eye className="h-4 w-4 mr-2" />,
+      icon: <History className="h-4 w-4" />,
       variant: 'outline',
+      size: 'icon',
+      tooltip: t('Login History'),
       onClick: () => handleUserLogsHistory()
+    },
+    {
+      label: t('Export'),
+      icon: <Download className="h-4 w-4 mr-2" />,
+      variant: 'outline',
+      onClick: async () => {
+        try {
+          const params = new URLSearchParams();
+          if (searchTerm) params.append('search', searchTerm);
+          if (selectedStatus !== 'all') params.append('status', selectedStatus);
+          if (startDate) params.append('start_date', startDate.toISOString().split('T')[0]);
+          if (endDate) params.append('end_date', endDate.toISOString().split('T')[0]);
+          
+          const response = await fetch(route('companies.export', 'companies') + '?' + params.toString());
+          if (!response.ok) throw new Error('Export failed');
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `companies_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          toast.success(t('Export completed successfully'));
+        } catch (error) {
+          toast.error(t('Export failed'));
+        }
+      }
+    },
+    {
+      label: t('Import'),
+      icon: <Upload className="h-4 w-4 mr-2" />,
+      variant: 'outline',
+      onClick: () => setIsImportModalOpen(true)
     },
     {
       label: t('Add Company'),
@@ -410,11 +517,28 @@ export default function Companies() {
       render: (value: any, row: any) => {
         return (
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white">
-              {getInitials(row.name)}
-            </div>
+            {row.avatar ? (
+              <img
+                src={row.avatar}
+                alt={row.name}
+                className="h-10 w-10 rounded-full object-cover shadow-sm"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = (window as any).baseUrl + '/images/avatar/avatar.png';
+                }}
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white">
+                {getInitials(row.name)}
+              </div>
+            )}
             <div>
-              <div className="font-medium">{row.name}</div>
+              <button
+                className="font-medium text-left hover:text-primary hover:underline cursor-pointer"
+                onClick={() => handleAction('company-info', row)}
+              >
+                {row.name}
+              </button>
               <div className="text-sm text-muted-foreground">{row.email}</div>
             </div>
           </div>
@@ -424,7 +548,11 @@ export default function Companies() {
     ...(isSaasMode ? [{ 
       key: 'plan_name', 
       label: t('Plan'),
-      render: (value: string) => <span className="capitalize">{value}</span>
+      render: (value: string) => (
+        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20 capitalize">
+          {value}
+        </span>
+      )
     }] : []),
     { 
       key: 'created_at', 
@@ -436,14 +564,14 @@ export default function Companies() {
 
   return (
     <PageTemplate 
-      title={t("Companies Management")} 
+      title={t("Companies")} 
       url="/companies"
       actions={pageActions}
       breadcrumbs={breadcrumbs}
       noPadding
     >
       {/* Search and filters section */}
-      <div className="bg-white rounded-lg shadow mb-4">
+      <div className="bg-white rounded-lg border shadow mb-4">
         <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -487,7 +615,21 @@ export default function Companies() {
                   size="sm" 
                   variant={activeView === 'list' ? "default" : "ghost"}
                   className="h-7 px-2"
-                  onClick={() => setActiveView('list')}
+                  onClick={() => {
+                    setActiveView('list');
+                    const params: any = { view: 'list', page: 1 };
+                    
+                    // Only add parameters that have values
+                    if (searchTerm) params.search = searchTerm;
+                    if (selectedStatus !== 'all') params.status = selectedStatus;
+                    if (startDate) params.start_date = startDate.toISOString().split('T')[0];
+                    if (endDate) params.end_date = endDate.toISOString().split('T')[0];
+                    if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+                    if (pageFilters.sort_field) params.sort_field = pageFilters.sort_field;
+                    if (pageFilters.sort_direction) params.sort_direction = pageFilters.sort_direction;
+                    
+                    router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
+                  }}
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -495,7 +637,21 @@ export default function Companies() {
                   size="sm" 
                   variant={activeView === 'grid' ? "default" : "ghost"}
                   className="h-7 px-2"
-                  onClick={() => setActiveView('grid')}
+                  onClick={() => {
+                    setActiveView('grid');
+                    const params: any = { view: 'grid', page: 1 };
+                    
+                    // Only add parameters that have values
+                    if (searchTerm) params.search = searchTerm;
+                    if (selectedStatus !== 'all') params.status = selectedStatus;
+                    if (startDate) params.start_date = startDate.toISOString().split('T')[0];
+                    if (endDate) params.end_date = endDate.toISOString().split('T')[0];
+                    if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+                    if (pageFilters.sort_field) params.sort_field = pageFilters.sort_field;
+                    if (pageFilters.sort_direction) params.sort_direction = pageFilters.sort_direction;
+                    
+                    router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
+                  }}
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
@@ -505,7 +661,7 @@ export default function Companies() {
               <Select 
                 value={pageFilters.per_page?.toString() || "10"} 
                 onValueChange={(value) => {
-                  const params: any = { page: 1, per_page: parseInt(value) };
+                  const params: any = { page: 1, per_page: parseInt(value), view: activeView };
                   
                   if (searchTerm) {
                     params.search = searchTerm;
@@ -563,10 +719,8 @@ export default function Companies() {
                   <Label>{t("Start Date")}</Label>
                   <DatePicker
                     selected={startDate}
-                    onSelect={setStartDate}
-                    onChange={(date) => {
-                      setStartDate(date);
-                    }}
+                    onSelect={(date) => handleDateFilter('start', date)}
+                    onChange={(date) => handleDateFilter('start', date)}
                   />
                 </div>
                 
@@ -574,33 +728,20 @@ export default function Companies() {
                   <Label>{t("End Date")}</Label>
                   <DatePicker
                     selected={endDate}
-                    onSelect={setEndDate}
-                    onChange={(date) => {
-                      setEndDate(date);
-                    }}
+                    onSelect={(date) => handleDateFilter('end', date)}
+                    onChange={(date) => handleDateFilter('end', date)}
                   />
                 </div>
                 
-                <div className="flex gap-2">
-                  <Button 
-                    variant="default" 
-                    size="sm"
-                    className="h-9"
-                    onClick={applyFilters}
-                  >
-                    {t("Apply Filters")}
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-9"
-                    onClick={handleResetFilters}
-                    disabled={!hasActiveFilters()}
-                  >
-                    {t("Reset Filters")}
-                  </Button>
-                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="h-9"
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters()}
+                >
+                  {t("Reset Filters")}
+                </Button>
               </div>
             </div>
           )}
@@ -613,22 +754,18 @@ export default function Companies() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-gray-50">
+                <tr className="bg-[#F0F0F1] dark:bg-gray-800 border-b">
                   {columns.map((column) => (
                     <th 
                       key={column.key} 
-                      className="px-4 py-3 text-left font-medium text-gray-500"
+                      className={`px-4 py-3 text-left font-medium text-gray-500 ${
+                        column.sortable ? 'cursor-pointer select-none' : ''
+                      }`}
                       onClick={() => column.sortable && handleSort(column.key)}
                     >
                       <div className="flex items-center">
                         {column.label}
-                        {column.sortable && (
-                          <span className="ml-1">
-                            {pageFilters.sort_field === column.key ? (
-                              pageFilters.sort_direction === 'asc' ? '↑' : '↓'
-                            ) : ''}
-                          </span>
-                        )}
+                        {column.sortable && renderSortIcon(column)}
                       </div>
                     </th>
                   ))}
@@ -765,7 +902,7 @@ export default function Companies() {
           </div>
 
           {/* Pagination section */}
-          <div className="p-4 border-t flex items-center justify-between">
+          <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
             <div className="text-sm text-muted-foreground">
               {t("Showing")} <span className="font-medium">{companies?.from || 0}</span> {t("to")} <span className="font-medium">{companies?.to || 0}</span> {t("of")} <span className="font-medium">{companies?.total || 0}</span> {t("companies")}
             </div>
@@ -783,7 +920,13 @@ export default function Companies() {
                     size={isTextLink ? "sm" : "icon"}
                     className={isTextLink ? "px-3" : "h-8 w-8"}
                     disabled={!link.url}
-                    onClick={() => link.url && router.get(link.url)}
+                    onClick={() => {
+                      if (link.url) {
+                        const url = new URL(link.url, window.location.origin);
+                        url.searchParams.set('view', activeView);
+                        router.get(url.pathname + url.search, {}, { preserveState: true, preserveScroll: true });
+                      }
+                    }}
                   >
                     {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                   </Button>
@@ -795,34 +938,131 @@ export default function Companies() {
       ) : (
         <div>
           {/* Grid View */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {companies?.data?.map((company: any) => (
-              <Card key={company.id} className="bg-white border border-gray-300 rounded-lg shadow">
-                {/* Header */}
+              <Card key={company.id} className="group relative overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300">
+                {/* Status Badge */}
+                <div className="absolute top-4 right-4 z-10">
+                  <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                    company.status === 'active'
+                      ? 'bg-green-50 text-green-700 ring-green-600/20'
+                      : 'bg-red-50 text-red-700 ring-red-600/20'
+                  }`}>
+                    {company.status === 'active' ? t('Active') : t('Inactive')}
+                  </span>
+                </div>
+
+                {/* Card Content */}
                 <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start space-x-4">
-                      <div className="h-16 w-16 rounded-full bg-gray-200 flex items-center justify-center text-lg font-bold text-gray-700">
-                        {getInitials(company.name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">{company.name}</h3>
-                        <p className="text-sm text-gray-600 mb-3">{company.email}</p>
+                  {/* Company Header */}
+                  <div className="flex items-start space-x-4 mb-6">
+                    <div className="relative">
+                      {company.avatar ? (
+                        <img
+                          src={company.avatar}
+                          alt={company.name}
+                          className="h-14 w-14 rounded-full object-cover shadow-sm"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = (window as any).baseUrl + '/images/avatar/avatar.png';
+                          }}
+                        />
+                      ) : (
+                        <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary shadow-sm">
+                          {getInitials(company.name)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 pr-12">
+                      <button
+                        className="text-lg font-semibold text-gray-900 dark:text-white mb-1 truncate text-left w-full block hover:text-primary transition-colors cursor-pointer"
+                        onClick={() => handleAction('company-info', company)}
+                      >
+                        {company.name}
+                      </button>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                        {company.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Plan Information */}
+                  {isSaasMode && (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6">
+                      <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center">
-                          <div className={`h-2 w-2 rounded-full mr-2 ${
-                            company.status === 'active' ? 'bg-gray-800' : 'bg-gray-400'
-                          }`}></div>
-                          <span className="text-sm font-medium text-gray-700">
-                            {company.status === 'active' ? t('Active') : t('Inactive')}
+                          <CreditCard className="h-4 w-4 text-primary mr-2" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                            {company.plan_name}
                           </span>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAction('upgrade-plan', company)}
+                          className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          {t("Upgrade")}
+                        </Button>
                       </div>
+                      {company.plan_expiry_date && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {t("Expires")}: {window.appSettings?.formatDateTime(company.plan_expiry_date, false) || new Date(company.plan_expiry_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Quick Actions */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex space-x-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleAction('login-as', company)}
+                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          >
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Login as Company")}</TooltipContent>
+                      </Tooltip>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleAction('company-info', company)}
+                            className="h-8 w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                          >
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Company Info")}</TooltipContent>
+                      </Tooltip>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleAction('edit', company)}
+                            className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("Edit")}</TooltipContent>
+                      </Tooltip>
                     </div>
                     
-                    {/* Actions dropdown */}
+                    {/* More Actions Dropdown */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="1"></circle>
                             <circle cx="12" cy="5" r="1"></circle>
@@ -831,20 +1071,6 @@ export default function Companies() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 z-50" sideOffset={5}>
-                        <DropdownMenuItem onClick={() => handleAction('login-as', company)}>
-                          <ArrowUpRight className="h-4 w-4 mr-2" />
-                          <span>{t("Login as Company")}</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAction('company-info', company)}>
-                          <Info className="h-4 w-4 mr-2" />
-                          <span>{t("Company Info")}</span>
-                        </DropdownMenuItem>
-                        {isSaasMode && (
-                          <DropdownMenuItem onClick={() => handleAction('upgrade-plan', company)}>
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            <span>{t("Upgrade Plan")}</span>
-                          </DropdownMenuItem>
-                        )}
                         {isSaasMode && permissions.includes('view-plan-requests') && (
                           <DropdownMenuItem onClick={() => handleAction('plan-requests', company)}>
                             <CreditCard className="h-4 w-4 mr-2" />
@@ -857,7 +1083,6 @@ export default function Companies() {
                             <span>{t("My Plan Orders")}</span>
                           </DropdownMenuItem>
                         )}
-
                         <DropdownMenuItem onClick={() => handleAction('reset-password', company)}>
                           <KeyRound className="h-4 w-4 mr-2" />
                           <span>{t("Reset Password")}</span>
@@ -870,80 +1095,38 @@ export default function Companies() {
                           <span>{company.status === 'active' ? t("Disable Login") : t("Enable Login")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleAction('edit', company)} className="text-amber-600">
-                          <Edit className="h-4 w-4 mr-2" />
-                          <span>{t("Edit")}</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAction('delete', company)} className="text-rose-600">
+                        <DropdownMenuItem onClick={() => handleAction('delete', company)} className="text-red-600 focus:text-red-600">
                           <Trash2 className="h-4 w-4 mr-2" />
                           <span>{t("Delete")}</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  
-                  {/* Plan info - only show in SaaS mode */}
-                  {isSaasMode && (
-                    <div className="border border-gray-200 rounded-md p-3 mb-4">
-                      <div className="flex items-center justify-center">
-                        <CreditCard className="h-4 w-4 text-gray-500 mr-2" />
-                        <span className="text-sm font-semibold text-gray-800">{company.plan_name}</span>
-                      </div>
-                      {company.plan_expiry_date && (
-                        <div className="text-xs text-gray-500 text-center mt-1">
-                          {t("Expires")}: {window.appSettings?.formatDateTime(company.plan_expiry_date, false) || new Date(company.plan_expiry_date).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                
-
-                
-                  {/* Action buttons */}
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleAction('edit', company)}
-                      className="flex-1 h-9 text-sm border-gray-300"
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      {t("Edit")}
-                    </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleAction('company-info', company)}
-                      className="flex-1 h-9 text-sm border-gray-300"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      {t("View")}
-                    </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleAction('delete', company)}
-                      className="flex-1 h-9 text-sm text-gray-700 border-gray-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {t("Delete")}
-                    </Button>
-                  </div>
                 </div>
               </Card>
             ))}
             
             {(!companies?.data || companies.data.length === 0) && (
-              <div className="col-span-full p-8 text-center text-gray-500">
-                {t("No companies found")}
+              <div className="col-span-full">
+                <div className="text-center py-12">
+                  <div className="mx-auto h-24 w-24 text-gray-300 dark:text-gray-600 mb-4">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-full h-full">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{t("No companies found")}</h3>
+                  <p className="text-gray-500 dark:text-gray-400 mb-6">{t("Get started by creating your first company")}</p>
+                  <Button onClick={handleAddNew} className="inline-flex items-center">
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t("Add Company")}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
           
           {/* Pagination for grid view */}
-          <div className="mt-6 bg-white p-4 rounded-lg shadow flex items-center justify-between">
+          <div className="mt-6 bg-[#F0F0F1] dark:bg-gray-800 p-4 rounded-lg shadow flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
               {t("Showing")} <span className="font-medium">{companies?.from || 0}</span> {t("to")} <span className="font-medium">{companies?.to || 0}</span> {t("of")} <span className="font-medium">{companies?.total || 0}</span> {t("companies")}
             </div>
@@ -960,7 +1143,13 @@ export default function Companies() {
                     size={isTextLink ? "sm" : "icon"}
                     className={isTextLink ? "px-3" : "h-8 w-8"}
                     disabled={!link.url}
-                    onClick={() => link.url && router.get(link.url)}
+                    onClick={() => {
+                      if (link.url) {
+                        const url = new URL(link.url, window.location.origin);
+                        url.searchParams.set('view', activeView);
+                        router.get(url.pathname + url.search, {}, { preserveState: true, preserveScroll: true });
+                      }
+                    }}
                   >
                     {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                   </Button>
@@ -987,26 +1176,28 @@ export default function Companies() {
           delete data.login_enabled;
           handleFormSubmit(data);
         }}
+        submitButtonText={formMode === 'create' ? t('Create') : t('Update')}
         formConfig={{
           fields: [
-            { name: 'name', label: t('Company Name'), type: 'text', required: true },
-            { name: 'email', label: t('Email'), type: 'email', required: true },
+            { name: 'name', label: t('Company Name'), type: 'text', required: formMode !== 'view', placeholder: t('Enter company name') },
+            { name: 'email', label: t('Email'), type: 'email', required: formMode !== 'view', placeholder: t('Enter company email') },
             { 
               name: 'login_enabled', 
-              label: t('Enable Login'),
-              placeholder: '', // Empty placeholder to prevent duplicate label
-              type: 'switch',
-              defaultValue: true
+              label: t('Enable Login'), 
+              type: 'switch', 
+              defaultValue: true,
+              conditional: (mode: string) => mode === 'create'
             },
             { 
               name: 'password', 
               label: t('Password'), 
-              type: 'password',
+              type: 'password', 
+              placeholder: t('Enter password'),
               required: true,
-              conditional: (mode, data) => {
-                return data?.login_enabled === true;
+              conditional: (mode: string, formData: any) => {
+                return mode === 'create' && formData.login_enabled;
               }
-            }
+            },
           ],
           modalSize: 'lg'
         }}
@@ -1016,7 +1207,7 @@ export default function Companies() {
         }}
         title={
           formMode === 'create' 
-            ? t('Add New Company') 
+            ? t('Add Company') 
             : formMode === 'edit' 
               ? t('Edit Company') 
               : t('View Company')
@@ -1038,9 +1229,10 @@ export default function Companies() {
         isOpen={isResetPasswordModalOpen}
         onClose={() => setIsResetPasswordModalOpen(false)}
         onSubmit={handleResetPasswordConfirm}
+        submitButtonText={t('Reset Password')}
         formConfig={{
           fields: [
-            { name: 'password', label: t('New Password'), type: 'password', required: true }
+            { name: 'password', label: t('New Password'), type: 'password', required: true, placeholder: t('Enter new password') },
           ],
           modalSize: 'sm'
         }}
@@ -1056,8 +1248,21 @@ export default function Companies() {
         onConfirm={handleUpgradePlanConfirm}
         plans={availablePlans}
         currentPlanId={currentCompany?.plan_id}
+        currentPlanDuration={currentCompany?.current_plan_duration}
         companyName={currentCompany?.name || ''}
       />
+      {/* Import Modal */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        type="companies"
+        title="Companies"
+      />
+
+      {/* View Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        {currentCompany && <ViewPopup record={currentCompany} isSaasMode={isSaasMode} />}
+      </Dialog>
     </PageTemplate>
   );
 }

@@ -13,50 +13,62 @@ use Database\Seeders\BudgetCategorySeeder;
 class ProjectBudgetController extends Controller
 {
     use HasPermissionChecks;
+    
     public function index(Request $request)
     {
         $this->authorizePermission('budget_view_any');
         
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
-        
         $userWorkspaceRole = $workspace->getMemberRole($user);
-        
         $query = ProjectBudget::with(['project.creator', 'categories', 'creator'])
-            ->where('workspace_id', $workspace->id);
-            
+            ->join('projects', 'project_budgets.project_id', '=', 'projects.id')
+            ->select('project_budgets.*')
+            ->where('project_budgets.workspace_id', $workspace->id);
         // Managers and clients only see budgets from their assigned projects
         if (in_array($userWorkspaceRole, ['manager', 'client'])) {
-            $query->whereHas('project', function($q) use ($user) {
-                $q->where(function($projectQuery) use ($user) {
-                    $projectQuery->whereHas('members', function($memberQuery) use ($user) {
-                        $memberQuery->where('user_id', $user->id);
-                    })
-                    ->orWhereHas('clients', function($clientQuery) use ($user) {
-                        $clientQuery->where('user_id', $user->id);
-                    })
-                    ->orWhere('created_by', $user->id);
-                });
+            $query->where(function($q) use ($user) {
+                $q->whereHas('project.members', function($memberQuery) use ($user) {
+                    $memberQuery->where('user_id', $user->id);
+                })
+                ->orWhereHas('project.clients', function($clientQuery) use ($user) {
+                    $clientQuery->where('user_id', $user->id);
+                })
+                ->orWhere('projects.created_by', $user->id);
             });
         }
 
         if ($request->search) {
-            $query->whereHas('project', function($q) use ($request) {
-                $q->where('title', 'like', '%' . $request->search . '%');
-            });
+            $query->where('projects.title', 'like', '%' . $request->search . '%');
         }
 
         if ($request->status) {
-            $query->where('status', $request->status);
+            $query->where('project_budgets.status', $request->status);
         }
 
         if ($request->project_id) {
-            $query->where('project_id', $request->project_id);
+            $query->where('project_budgets.project_id', $request->project_id);
+        }
+        
+        // Add sorting
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+        if(config('app.is_demo',false))
+        {
+            $sortOrder = $request->get('sort_order', 'asc');
+        }
+        // Validate sort fields
+        $allowedSortFields = ['created_at', 'total_budget', 'status', 'period_type', 'project.title'];
+        if ($sortBy === 'project.title') {
+            $query->orderBy('projects.title', $sortOrder);
+        } elseif (in_array($sortBy, $allowedSortFields)) {
+            $query->orderBy('project_budgets.' . $sortBy, $sortOrder);
+        } else {
+            $query->orderBy('project_budgets.created_at', 'desc');
         }
         
         $perPage = $request->get('per_page', 12);
-        $budgets = $query->latest()->paginate($perPage);
-        
+        $budgets = $query->paginate($perPage);
         // Add budget utilization data
         $budgets->getCollection()->transform(function ($budget) {
             $budget->total_spent = $budget->total_spent;
@@ -64,7 +76,7 @@ class ProjectBudgetController extends Controller
             $budget->utilization_percentage = $budget->utilization_percentage;
             return $budget;
         });
-        
+
         $userWorkspaceRole = $workspace->getMemberRole($user);
         
         // Get projects without budgets for the workspace with access control
@@ -115,7 +127,7 @@ class ProjectBudgetController extends Controller
             'allProjects' => $allProjects,
             'currencies' => $currencies,
             'workspace' => $workspace,
-            'filters' => $request->only(['search', 'status', 'project_id', 'per_page']),
+            'filters' => $request->only(['search', 'status', 'project_id', 'per_page', 'sort_by', 'sort_order', 'view']),
             'userWorkspaceRole' => $userWorkspaceRole,
             'permissions' => [
                 'create' => $this->checkPermission('budget_create'),
@@ -143,6 +155,16 @@ class ProjectBudgetController extends Controller
         $budget->remaining_budget = $budget->remaining_budget;
         $budget->utilization_percentage = $budget->utilization_percentage;
         
+        // Process submitter avatars for expenses
+        $budget->expenses->transform(function ($expense) {
+            if ($expense->submitter) {
+                $expense->submitter->avatar = check_file($expense->submitter->avatar)
+                    ? get_file($expense->submitter->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $expense;
+        });
+
         // Add computed attributes for each category
         $budget->categories->transform(function ($category) {
             $category->total_spent = $category->total_spent;
@@ -152,8 +174,31 @@ class ProjectBudgetController extends Controller
             return $category;
         });
         
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+        
+        // Get all projects for editing
+        $allProjectsQuery = Project::forWorkspace($workspace->id)
+            ->orderBy('title');
+            
+        if (in_array($userWorkspaceRole, ['manager', 'client'])) {
+            $allProjectsQuery->where(function($q) use ($user) {
+                $q->whereHas('members', function($memberQuery) use ($user) {
+                    $memberQuery->where('user_id', $user->id);
+                })
+                ->orWhereHas('clients', function($clientQuery) use ($user) {
+                    $clientQuery->where('user_id', $user->id);
+                })
+                ->orWhere('created_by', $user->id);
+            });
+        }
+        
+        $allProjects = $allProjectsQuery->get(['id', 'title']);
+        
         return Inertia::render('budgets/Show', [
             'budget' => $budget,
+            'allProjects' => $allProjects,
             'permissions' => [
                 'update' => $this->checkPermission('budget_update'),
                 'delete' => $this->checkPermission('budget_delete'),
@@ -234,11 +279,13 @@ class ProjectBudgetController extends Controller
         $this->authorizePermission('budget_update');
         
         $validated = $request->validate([
+            'project_id' => 'required|exists:projects,id',
             'total_budget' => 'required|numeric|min:0',
             'period_type' => 'required|in:project,monthly,quarterly,yearly',
             'description' => 'nullable|string',
             'status' => 'required|in:active,completed,cancelled',
             'categories' => 'required|array|min:1',
+            'categories.*.id' => 'nullable',
             'categories.*.name' => 'required|string|max:255',
             'categories.*.allocated_amount' => 'required|numeric|min:0',
             'categories.*.color' => 'nullable|string',
@@ -246,6 +293,7 @@ class ProjectBudgetController extends Controller
         ]);
 
         $budget->update([
+            'project_id' => $validated['project_id'],
             'total_budget' => $validated['total_budget'],
             'period_type' => $validated['period_type'],
             'description' => $validated['description'],
@@ -253,16 +301,27 @@ class ProjectBudgetController extends Controller
         ]);
 
         // Update categories
-        $budget->categories()->delete();
-        foreach ($validated['categories'] as $index => $category) {
-            $budget->categories()->create([
-                'name' => $category['name'],
-                'allocated_amount' => $category['allocated_amount'],
-                'color' => $category['color'] ?? '#3B82F6',
-                'description' => $category['description'] ?? '',
-                'sort_order' => $index + 1
-            ]);
+        $updatedCategoryIds = [];
+        foreach($validated['categories'] as $index => $category){
+            if(!empty($category['id'])){
+                BudgetCategory::find($category['id'])->update([
+                    ...$category,
+                    'sort_order' => $index + 1
+                    ]);
+                    $updatedCategoryIds[] = $category['id'];
+            }else{
+                $newCategory = $budget->categories()->create([
+                    'name' => $category['name'],
+                    'allocated_amount' => $category['allocated_amount'],
+                    'color' => $category['color'] ?? '#3B82F6',
+                    'description' => $category['description'] ?? '',
+                    'sort_order' => $index + 1
+                ]);
+                $updatedCategoryIds[] = $newCategory->id;
+            }
         }
+
+        $budget->categories()->whereNotIn('id',$updatedCategoryIds)->delete();
 
         return back()->with('success', __('Budget updated successfully!'));
     }
@@ -286,6 +345,7 @@ class ProjectBudgetController extends Controller
         // Add workspace-specific customizations if needed
         $categories = collect($defaultCategories)->map(function ($category) {
             return [
+                'id' => $category['id'],
                 'name' => $category['name'],
                 'color' => $category['color'],
                 'description' => $category['description'],

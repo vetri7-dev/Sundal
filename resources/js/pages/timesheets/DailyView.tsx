@@ -85,12 +85,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
     const getBillableTotal = () => entriesData.filter(e => e.is_billable).reduce((sum, entry) => sum + (Number(entry.hours) || 0), 0);
 
     const formatDate = (date: Date) => {
-        return date.toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        });
+        return window.appSettings.formatDateTime(date, false);
     };
 
     const isToday = currentDate.toDateString() === new Date().toDateString();
@@ -149,7 +144,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
 
     return (
         <PageTemplate 
-            title="Daily Time Tracking" 
+            title="Daily View" 
             actions={pageActions}
             breadcrumbs={breadcrumbs}
         >
@@ -169,10 +164,10 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                             </Button>
                             
                             <div className="text-center">
-                                <CardTitle className="text-xl">
+                                <CardTitle className="text-lg">
                                     {formatDate(currentDate)}
-                                    {isToday && <Badge className="ml-2">Today</Badge>}
-                                    {isWeekend && <Badge variant="secondary" className="ml-2">Weekend</Badge>}
+                                    {isToday && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">Today</span>}
+                                    {isWeekend && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">Weekend</span>}
                                 </CardTitle>
                             </div>
                             
@@ -210,7 +205,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                             <Clock className="h-5 w-5 text-blue-600" />
                             <span className="text-sm font-medium text-blue-600">Total Hours</span>
                         </div>
-                        <div className="text-2xl font-bold text-blue-900">
+                        <div className="text-lg font-bold text-blue-900">
                             {(getDayTotal() || 0).toFixed(2)}h
                         </div>
                     </CardContent>
@@ -222,7 +217,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                             <Calendar className="h-5 w-5 text-green-600" />
                             <span className="text-sm font-medium text-green-600">Billable Hours</span>
                         </div>
-                        <div className="text-2xl font-bold text-green-900">
+                        <div className="text-lg font-bold text-green-900">
                             {(getBillableTotal() || 0).toFixed(2)}h
                         </div>
                     </CardContent>
@@ -233,7 +228,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-purple-600">Entries</span>
                         </div>
-                        <div className="text-2xl font-bold text-purple-900">
+                        <div className="text-lg font-bold text-purple-900">
                             {entriesData.length}
                         </div>
                     </CardContent>
@@ -244,7 +239,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-orange-600">Utilization</span>
                         </div>
-                        <div className="text-2xl font-bold text-orange-900">
+                        <div className="text-lg font-bold text-orange-900">
                             {(((getDayTotal() || 0) / 8) * 100).toFixed(0)}%
                         </div>
                         <div className="text-xs text-muted-foreground">Based on 8h day</div>
@@ -256,7 +251,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-center">
-                        <CardTitle>Time Entries</CardTitle>
+                        <CardTitle className='text-xl'>Time Entries</CardTitle>
                         {hasPermission(userPermissions, 'timesheet_create') && (
                             <Button onClick={() => setIsFormOpen(true)}>
                                 <Plus className="h-4 w-4 mr-2" />
@@ -271,7 +266,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                         timesheetId={timesheetId}
                         projects={projects}
                         filters={filters}
-                        onRefresh={() => window.location.reload()}
+                        onRefresh={() => router.get(route('timesheets.daily-view'), { date: currentDate.toISOString().split('T')[0] }, { preserveState: true })}
                     />
                 </CardContent>
             </Card>

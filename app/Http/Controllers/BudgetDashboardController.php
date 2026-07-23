@@ -15,7 +15,7 @@ class BudgetDashboardController extends Controller
     use HasPermissionChecks;
     public function index()
     {
-        $this->authorizePermission('budget_view_dashboard');
+        $this->authorizePermission('budget_dashboard_view');
         
         $user = auth()->user();
         $workspace = $this->getCurrentWorkspace($user);
@@ -36,7 +36,7 @@ class BudgetDashboardController extends Controller
 
     public function overview()
     {
-        $this->authorizePermission('budget_view_dashboard');
+        $this->authorizePermission('budget_dashboard_view');
         
         $user = auth()->user();
         $workspace = $this->getCurrentWorkspace($user);
@@ -92,7 +92,16 @@ class BudgetDashboardController extends Controller
                 })
                 ->latest()
                 ->limit(10)
-                ->get();
+                ->get()
+                ->map(function($expense) {
+                    $submitter = $expense->submitter;
+                    if ($submitter) {
+                        $submitter->avatar = check_file($submitter->avatar)
+                            ? get_file($submitter->avatar)
+                            : get_file('avatars/avatar.png');
+                    }
+                    return $expense;
+                });
 
             // Get pending approvals count
             $pendingApprovals = ProjectExpense::whereHas('project', function($q) use ($workspaceId) {
@@ -147,7 +156,7 @@ class BudgetDashboardController extends Controller
 
     public function alerts()
     {
-        $this->authorizePermission('budget_view_dashboard');
+        $this->authorizePermission('budget_dashboard_view');
         
         $user = auth()->user();
         $workspace = $this->getCurrentWorkspace($user);
@@ -210,7 +219,7 @@ class BudgetDashboardController extends Controller
 
     public function trends(Request $request)
     {
-        $this->authorizePermission('budget_view_dashboard');
+        $this->authorizePermission('budget_dashboard_view');
         
         $user = auth()->user();
         $workspace = $user->currentWorkspace;

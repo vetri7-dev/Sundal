@@ -299,4 +299,253 @@ class BenefitPaymentController extends Controller
         // using Benefit's webhook secret and HMAC
         return true;
     }
+
+    public function createInvoicePayment(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_token' => 'required|string',
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+            
+            $paymentSettings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['benefit_secret_key', 'benefit_public_key', 'is_benefit_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if ($paymentSettings['is_benefit_enabled'] !== '1') {
+                return response()->json(['error' => 'Benefit payment method is not enabled'], 400);
+            }
+            
+            if (empty($paymentSettings['benefit_secret_key'])) {
+                return response()->json(['error' => 'Benefit credentials are not configured'], 400);
+            }
+            
+            $orderID = 'invoice_' . $invoice->id . '_' . time();
+            
+            $userData = [
+                "amount" => $request->amount,
+                "currency" => "BHD",
+                "customer_initiated" => true,
+                "threeDSecure" => true,
+                "save_card" => false,
+                "description" => "Invoice Payment - " . $invoice->invoice_number,
+                "metadata" => ["udf1" => "Invoice Payment"],
+                "reference" => ["transaction" => $orderID, "order" => $orderID],
+                "receipt" => ["email" => true, "sms" => true],
+                "customer" => [
+                    "first_name" => $invoice->client->name ?? 'Customer',
+                    "middle_name" => "",
+                    "last_name" => "",
+                    "email" => $invoice->client->email ?? 'customer@example.com',
+                    "phone" => ["country_code" => "973", "number" => "33123456"]
+                ],
+                "source" => ["id" => "src_bh.benefit"],
+                "post" => ["url" => route('benefit.invoice.callback')],
+                "redirect" => ["url" => route('benefit.invoice.success') . '?invoice_id=' . $invoice->id . '&amount=' . $request->amount . '&invoice_token=' . $request->invoice_token]
+            ];
+            
+            $response = \Http::withHeaders([
+                'Authorization' => 'Bearer ' . $paymentSettings['benefit_secret_key'],
+                'accept' => 'application/json',
+                'content-type' => 'application/json',
+            ])->post('https://api.tap.company/v2/charges', $userData);
+
+            if ($response->successful()) {
+                $res = $response->json();
+                if (isset($res['transaction']['url'])) {
+                    return response()->json([
+                        'success' => true,
+                        'redirect_url' => $res['transaction']['url'],
+                        'order_id' => $orderID
+                    ]);
+                }
+            }
+
+            return response()->json(['error' => 'Payment initialization failed'], 500);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function processInvoicePayment(Request $request)
+    {
+        $request->validate([
+            'invoice_token' => 'required|string',
+            'amount' => 'required|numeric|min:0',
+            'payment_id' => 'required|string',
+            'transaction_id' => 'required|string',
+        ]);
+
+        try {
+            $invoice = \App\Models\Invoice::where('payment_token', $request->invoice_token)->firstOrFail();
+
+            $invoice->createPaymentRecord(
+                $request->amount,
+                'benefit',
+                $request->payment_id
+            );
+
+            return redirect()->route('invoices.payment.success', $invoice->payment_token)
+                ->with('success', __('Payment successful'));
+
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => __('Payment processing failed. Please try again or contact support.')]);
+        }
+    }
+
+    public function invoiceSuccess(Request $request)
+    {
+        try {
+            $invoiceId = $request->input('invoice_id');
+            $amount = $request->input('amount');
+            $invoiceToken = $request->input('invoice_token');
+            $tap_id = $request->input('tap_id') ?: $request->input('charge_id');
+
+            if ($invoiceId && $amount && $invoiceToken) {
+                $invoice = \App\Models\Invoice::find($invoiceId);
+
+                if ($invoice && $invoice->payment_token === $invoiceToken) {
+                    $invoice->createPaymentRecord($amount, 'benefit', $tap_id ?: 'benefit_' . time());
+
+                    return redirect()->route('invoices.payment.success', $invoiceToken)
+                        ->with('success', __('Payment completed successfully'));
+                }
+            }
+
+            return redirect()->route('invoices.payment.success', $invoiceToken ?: 'invalid')
+                ->with('error', __('Payment verification failed'));
+
+        } catch (\Exception $e) {
+            return redirect()->route('home')
+                ->with('error', __('Payment processing failed'));
+        }
+    }
+
+    public function invoiceCallback(Request $request)
+    {
+        try {
+            $orderId = $request->input('billExternalReferenceNo');
+            $statusId = $request->input('status_id');
+
+            if ($orderId && $statusId === '1') {
+                $parts = explode('_', $orderId);
+                if (count($parts) >= 2 && $parts[0] === 'invoice') {
+                    $invoiceId = $parts[1];
+                    $invoice = \App\Models\Invoice::find($invoiceId);
+
+                    if ($invoice) {
+                        $invoice->createPaymentRecord(
+                            $invoice->remaining_amount,
+                            'benefit',
+                            $request->input('billcode') ?: $orderId
+                        );
+                        return response('SUCCESS');
+                    }
+                }
+            }
+
+            return response('FAILED', 400);
+
+        } catch (\Exception $e) {
+            return response('ERROR', 500);
+        }
+    }
+
+    public function processInvoicePaymentFromLink(Request $request, $token)
+    {
+        try {
+            $request->validate([
+                'amount' => 'required|numeric|min:0.01'
+            ]);
+            
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+            
+            $paymentSettings = PaymentSetting::where('user_id', $invoice->created_by)
+                ->whereIn('key', ['benefit_secret_key', 'benefit_public_key', 'is_benefit_enabled'])
+                ->pluck('value', 'key')
+                ->toArray();
+
+            if ($paymentSettings['is_benefit_enabled'] !== '1') {
+                return response()->json(['error' => 'Benefit payment method is not enabled'], 400);
+            }
+            
+            if (empty($paymentSettings['benefit_secret_key'])) {
+                return response()->json(['error' => 'Benefit credentials are not configured'], 400);
+            }
+            
+            $orderID = 'invoice_' . $invoice->id . '_' . time();
+            
+            $userData = [
+                "amount" => $request->amount,
+                "currency" => "BHD",
+                "customer_initiated" => true,
+                "threeDSecure" => true,
+                "save_card" => false,
+                "description" => "Invoice Payment - " . $invoice->invoice_number,
+                "metadata" => ["udf1" => "Invoice Payment"],
+                "reference" => ["transaction" => $orderID, "order" => $orderID],
+                "receipt" => ["email" => true, "sms" => true],
+                "customer" => [
+                    "first_name" => $invoice->client->name ?? 'Customer',
+                    "middle_name" => "",
+                    "last_name" => "",
+                    "email" => $invoice->client->email ?? 'customer@example.com',
+                    "phone" => ["country_code" => "973", "number" => "33123456"]
+                ],
+                "source" => ["id" => "src_bh.benefit"],
+                "post" => ["url" => route('benefit.invoice.callback')],
+                "redirect" => ["url" => route('benefit.invoice.success.link', ['token' => $token]) . '?amount=' . $request->amount]
+            ];
+            
+            $response = \Http::withHeaders([
+                'Authorization' => 'Bearer ' . $paymentSettings['benefit_secret_key'],
+                'accept' => 'application/json',
+                'content-type' => 'application/json',
+            ])->post('https://api.tap.company/v2/charges', $userData);
+
+            if ($response->successful()) {
+                $res = $response->json();
+                if (isset($res['transaction']['url'])) {
+                    return response()->json([
+                        'success' => true,
+                        'redirect_url' => $res['transaction']['url'],
+                        'order_id' => $orderID
+                    ]);
+                }
+            }
+
+            return response()->json(['error' => 'Payment initialization failed'], 500);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function invoiceSuccessFromLink(Request $request, $token)
+    {
+        try {
+            $amount = $request->input('amount');
+            $tap_id = $request->input('tap_id') ?: $request->input('charge_id');
+            
+            $invoice = \App\Models\Invoice::where('payment_token', $token)->firstOrFail();
+            
+            if ($amount) {
+                $invoice->createPaymentRecord($amount, 'benefit', $tap_id ?: 'benefit_' . time());
+                
+                return redirect()->route('invoices.payment', $token)
+                    ->with('success', 'Payment processed successfully.');
+            }
+            
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment verification failed');
+            
+        } catch (\Exception $e) {
+            return redirect()->route('invoices.payment', $token)
+                ->with('error', 'Payment processing failed');
+        }
+    }
 }

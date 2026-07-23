@@ -9,7 +9,6 @@ use App\Observers\UserObserver;
 use App\Observers\PlanObserver;
 use App\Observers\WorkspaceObserver;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,11 +25,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Note: URL::forceRootUrl is NOT needed here.
-        // Symfony's Request auto-detects /sundal as the base URL from
-        // SCRIPT_NAME (/sundal/index.php), so url('/') and route() helpers
-        // naturally return https://codecartz.com/sundal/... URLs.
-
         // Register the UserObserver
         User::observe(UserObserver::class);
         
@@ -48,5 +42,17 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             // Silently fail during migrations or when database is not ready
         }
+
+        // Override Spatie media-library max_file_size dynamically from DB settings
+        // This runs after auth is resolved (on actual HTTP requests)
+        $this->app['events']->listen('Illuminate\Auth\Events\Authenticated', function () {
+            try {
+                $config = \App\Services\StorageConfigService::getStorageConfig();
+                $maxBytes = ($config['max_file_size_mb'] ?? 2) * 1024 * 1024;
+                config(['media-library.max_file_size' => $maxBytes]);
+            } catch (\Exception $e) {
+                // Silently fail
+            }
+        });
     }
 }

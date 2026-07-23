@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Portfolio;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\User;
@@ -10,6 +9,7 @@ use App\Services\PlanLimitService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,15 +38,28 @@ class ProjectController extends Controller
         // Access control based on workspace role
         if ($userWorkspaceRole === 'owner') {
             // Owner: Full access to all projects
+        } else if ($userWorkspaceRole === 'manager') {
+            // Manager: Assigned projects + self-created projects + public projects
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('members', function ($memberQuery) use ($user) {
+                    $memberQuery->where('user_id', $user->id);
+                })
+                    ->orWhereHas('clients', function ($clientQuery) use ($user) {
+                        $clientQuery->where('user_id', $user->id);
+                    })
+                    ->orWhere('created_by', $user->id)
+                    ->orWhere('is_public', true);
+            });
         } else {
-            // Non-owners: Only assigned projects
+            // Non-owners: Only assigned projects + public projects
             $query->where(function ($q) use ($user, $userWorkspaceRole) {
                 $q->whereHas('members', function ($memberQuery) use ($user) {
                     $memberQuery->where('user_id', $user->id);
                 })
                     ->orWhereHas('clients', function ($clientQuery) use ($user) {
                         $clientQuery->where('user_id', $user->id);
-                    });
+                    })
+                    ->orWhere('is_public', true);
 
                 // Client/Member: Only self-created projects
                 if (in_array($userWorkspaceRole, ['client', 'member'])) {
@@ -62,9 +75,40 @@ class ProjectController extends Controller
         if ($request->priority)
             $query->byPriority($request->priority);
 
-        $perPage = in_array($request->get('per_page', 12), [12, 24, 48]) ? $request->get('per_page', 12) : 12;
-        $projects = $query->latest()->paginate($perPage);
+        // Apply sorting with field validation
+        $allowedSortFields = ['title', 'priority', 'deadline', 'status', 'created_at'];
+        $sortField = $request->input('sort_field', 'created_at');
+        $sortDirection = $request->input('sort_direction', 'desc');
+        
+        // Validate sort field
+        if (!in_array($sortField, $allowedSortFields)) {
+            $sortField = 'created_at';
+        }
+        
+        // Validate sort direction
+        if (!in_array($sortDirection, ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+        
+        // Apply sorting
+        if ($sortField === 'created_at') {
+            $query->latest();
+        } else {
+            $query->orderBy($sortField, $sortDirection);
+        }
 
+        $perPage = in_array($request->get('per_page', 12), [12, 24, 48, 100]) ? $request->get('per_page', 12) : 12;
+        $projects = $query->paginate($perPage);
+
+        $projects->getCollection()->each(function ($project) {
+            $project->members->each(function ($member) {
+                if ($member->user) {
+                    $member->user->avatar = check_file($member->user->avatar)
+                        ? get_file($member->user->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+            });
+        });
         $members = User::whereHas('workspaces', function ($q) use ($workspace) {
             $q->where('workspace_id', $workspace->id)->where('status', 'active')->where('role', 'member');
         })->get();
@@ -82,8 +126,7 @@ class ProjectController extends Controller
             'members' => $members,
             'managers' => $managers,
             'clients' => $clients,
-            'portfolios' => Portfolio::where('workspace_id', $user->current_workspace_id)->orderBy('name')->get(['id','name','color']),
-            'filters' => $request->only(['search', 'status', 'priority']),
+            'filters' => $request->only(['search', 'status', 'priority', 'sort_field', 'sort_direction', 'per_page', 'view']),
             'userWorkspaceRole' => $userWorkspaceRole,
             'permissions' => $this->getModuleCrudPermissions('project')
         ]);
@@ -111,7 +154,6 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'portfolio_id' => 'nullable|exists:portfolios,id',
             'client_ids' => 'array',
             'client_ids.*' => 'exists:users,id',
             'status' => 'required|in:planning,active,on_hold,completed,cancelled',
@@ -198,8 +240,8 @@ class ProjectController extends Controller
                 $hasAccess = $hasAccess || $project->created_by === $user->id;
             }
 
-            if (!$hasAccess)
-                abort(403);
+            // if (!$hasAccess)
+            //     abort(403);
         }
 
         $project->load([
@@ -209,7 +251,7 @@ class ProjectController extends Controller
             'members.user',
             'milestones',
             'expenses' => function ($query) {
-                $query->with('budgetCategory')->latest()->limit(5);
+                $query->with(['budgetCategory', 'submitter'])->get();
             }
         ]);
 
@@ -232,19 +274,8 @@ class ProjectController extends Controller
 
         $project->setRelation('attachments', $attachments);
 
-        // Handle notes with pagination and search
-        $notesQuery = $project->notes()->with('creator');
-
-        if ($request->notes_search) {
-            $notesQuery->where(function ($query) use ($request) {
-                $query->where('title', 'like', '%' . $request->notes_search . '%')
-                    ->orWhere('content', 'like', '%' . $request->notes_search . '%');
-            });
-        }
-
-        $notesPerPage = in_array($request->notes_per_page, [5, 10, 20, 50]) ? $request->notes_per_page : 5;
-        $notes = $notesQuery->latest()->paginate($notesPerPage, ['*'], 'notes_page');
-
+        // Load all notes without pagination or search
+        $notes = $project->notes()->with('creator')->latest()->get();
         $project->setRelation('notes', $notes);
 
         // Handle activities with pagination and search
@@ -265,16 +296,30 @@ class ProjectController extends Controller
             ->latest()
             ->get();
 
-        // Load all task stages for this workspace (used by Kanban + Gantt)
-        $taskStages = \App\Models\TaskStage::forWorkspace($user->current_workspace_id)
-            ->ordered()
-            ->get();
-
+        $projectTasks->each(function ($task) {
+            foreach (['assignedTo', 'creator'] as $relation) {
+                if ($task->$relation) {
+                    $task->$relation->avatar = check_file($task->$relation->avatar)
+                        ? get_file($task->$relation->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+            }
+        });
         // Load project bugs with related data
         $projectBugs = \App\Models\Bug::with(['bugStatus', 'assignedTo', 'reportedBy'])
             ->where('project_id', $project->id)
             ->latest()
             ->get();
+        
+        $projectBugs->each(function ($bug) {
+            foreach (['assignedTo','reportedBy'] as $relation) {
+                if ($bug->$relation) {
+                    $bug->$relation->avatar = check_file($bug->$relation->avatar)
+                        ? get_file($bug->$relation->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+            }
+        });
 
         // Load project timesheets with related data
         $projectTimesheets = \App\Models\Timesheet::with([
@@ -289,7 +334,65 @@ class ProjectController extends Controller
                 $query->where('project_id', $project->id);
             })
             ->latest()
-            ->get();
+            ->get()
+            ->map(function ($timesheet) {
+                $timesheet->total_hours = $timesheet->entries->sum('hours');
+                $timesheet->billable_hours = $timesheet->entries->where('is_billable', true)->sum('hours');
+                $timesheet->billable_percentage = $timesheet->total_hours > 0
+                    ? round(($timesheet->billable_hours / $timesheet->total_hours) * 100)
+                    : 0;
+                $timesheet->entries_count = $timesheet->entries->count();
+                // user.avatar
+                if ($timesheet->user) {
+                    $timesheet->user->avatar = check_file($timesheet->user->avatar)
+                        ? get_file($timesheet->user->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+                return $timesheet;
+            });
+
+        // Calculate project totals (only submitted timesheets)
+        $submittedTimesheets = $projectTimesheets->whereIn('status', ['submitted', 'approved']);
+        $project->total_project_hours = $submittedTimesheets->sum('total_hours');
+        $project->total_billable_hours = $submittedTimesheets->sum('billable_hours');
+        $project->billable_rate_percentage = $project->total_project_hours > 0
+            ? round(($project->total_billable_hours / $project->total_project_hours) * 100)
+            : 0;
+        $project->total_team_members = $projectTimesheets->pluck('user.id')->unique()->count();
+        $project->approved_timesheets_count = $projectTimesheets->where('status', 'approved')->count();
+        $project->submitted_timesheets_percentage = $projectTimesheets->count() > 0
+            ? round(($submittedTimesheets->count() / $projectTimesheets->count()) * 100)
+            : 0;
+
+        // project members with avatar URLs
+        $project->members->each(function ($member) {
+            if ($member->user) {
+                $member->user->avatar = check_file($member->user->avatar)
+                    ? get_file($member->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->clients->each(function ($client) {
+            if ($client) {
+                $client->avatar = check_file($client->avatar)
+                    ? get_file($client->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->attachments->getCollection()->each(function ($attachment) {
+            if ($attachment->uploadedBy) {
+                $attachment->uploadedBy->avatar = check_file($attachment->uploadedBy->avatar)
+                    ? get_file($attachment->uploadedBy->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->activities->getCollection()->each(function ($activity) {
+            if ($activity->user) {
+                $activity->user->avatar = check_file($activity->user->avatar)
+                    ? get_file($activity->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
 
         // Load single budget for this project
         $budget = \App\Models\ProjectBudget::with(['categories', 'creator'])
@@ -306,7 +409,7 @@ class ProjectController extends Controller
             $budget->expenses = \App\Models\ProjectExpense::with('submitter')
                 ->where('project_id', $project->id)
                 ->latest()
-                ->limit(3)
+                ->limit(4)
                 ->get();
         }
 
@@ -338,7 +441,6 @@ class ProjectController extends Controller
             'managers' => $managers,
             'clients' => $clients,
             'projectTasks' => $projectTasks,
-            'taskStages' => $taskStages,
             'projectBugs' => $projectBugs,
             'projectTimesheets' => $projectTimesheets,
             'userWorkspaceRole' => $userWorkspaceRole,
@@ -350,8 +452,9 @@ class ProjectController extends Controller
             'canManageAttachments' => $this->checkPermission('project_manage_attachments'),
             'canManageNotes' => $this->checkPermission('project_manage_notes'),
             'canTrackProgress' => $this->checkPermission('project_track_progress'),
+            'canManageSharedSettings' => $this->checkPermission('project_manage_shared_settings'),
             'attachmentFilters' => $request->only(['attachment_search', 'attachments_per_page']),
-            'noteFilters' => $request->only(['notes_search', 'notes_per_page']),
+
             'activityFilters' => $request->only(['activity_search', 'activity_per_page'])
         ]);
     }
@@ -371,50 +474,19 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'portfolio_id' => 'nullable|exists:portfolios,id',
-            'client_ids' => 'array',
-            'client_ids.*' => 'exists:users,id',
             'status' => 'required|in:planning,active,on_hold,completed,cancelled',
             'priority' => 'required|in:low,medium,high,urgent',
             'start_date' => 'nullable|date',
             'deadline' => 'nullable|date|after:start_date',
             'estimated_hours' => 'nullable|integer|min:1',
             'budget' => 'nullable|numeric|min:0',
-            'is_public' => 'boolean',
-            'member_ids' => 'array',
-            'member_ids.*' => 'exists:users,id'
+            'is_public' => 'boolean'
         ]);
-
-        $clientIds = $validated['client_ids'] ?? [];
-        unset($validated['client_ids']);
 
         $project->update([
             ...$validated,
             'updated_by' => auth()->id()
         ]);
-
-        // Update clients
-        $project->projectClients()->delete();
-        foreach ($clientIds as $clientId) {
-            \App\Models\ProjectClient::create([
-                'project_id' => $project->id,
-                'user_id' => $clientId,
-                'assigned_by' => auth()->id()
-            ]);
-        }
-
-        // Update members
-        $project->members()->delete();
-        if (!empty($validated['member_ids'])) {
-            foreach ($validated['member_ids'] as $userId) {
-                ProjectMember::create([
-                    'project_id' => $project->id,
-                    'user_id' => $userId,
-                    'role' => 'member',
-                    'assigned_by' => auth()->id()
-                ]);
-            }
-        }
 
         $project->logActivity('updated', "Project '{$project->title}' was updated");
 
@@ -434,17 +506,17 @@ class ProjectController extends Controller
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
+        // Check if user is workspace owner (override role if needed)
+        if ($user->id === $workspace->owner_id) {
+            $userWorkspaceRole = 'owner';
+        }
+
         if (!$userWorkspaceRole) {
             abort(403, 'You are not a member of this workspace.');
         }
 
         // Only owner and managers can delete projects
         if (!in_array($userWorkspaceRole, ['owner', 'manager'])) {
-            abort(403);
-        }
-
-        // Managers cannot delete projects
-        if ($userWorkspaceRole === 'manager') {
             abort(403);
         }
 
@@ -745,7 +817,7 @@ class ProjectController extends Controller
 
     public function getMembers(Project $project)
     {
-       
+
         $this->authorizePermission('project_view');
 
         $user = auth()->user();
@@ -767,4 +839,428 @@ class ProjectController extends Controller
 
         return response()->json($members);
     }
+    public function updateSharedSettings(Request $request, Project $project)
+    {
+        $this->authorizePermission('project_manage_shared_settings');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        if (!$workspace || $project->workspace_id != $workspace->id) {
+            abort(403, 'Project not found in current workspace.');
+        }
+
+        $validated = $request->validate([
+            'shared_settings' => 'required|array',
+            'shared_settings.overview' => 'boolean',
+            'shared_settings.member' => 'boolean',
+            'shared_settings.client' => 'boolean',
+            'shared_settings.milestone' => 'boolean',
+            'shared_settings.notes' => 'boolean',
+            'shared_settings.budget' => 'boolean',
+            'shared_settings.expenses' => 'boolean',
+            'shared_settings.task' => 'boolean',
+            'shared_settings.recent_bugs' => 'boolean',
+            'shared_settings.timesheet' => 'boolean',
+            'shared_settings.files' => 'boolean',
+            'shared_settings.activity' => 'boolean',
+
+            'password' => 'nullable|string'
+        ]);
+
+        $project->update([
+            'shared_settings' => $validated['shared_settings'],
+            'password' => $validated['password'] ? Hash::make($validated['password']) : null,
+            'updated_by' => auth()->id()
+        ]);
+
+        $project->logActivity('shared_settings_updated', "Project shared settings were updated");
+
+        return back()->with('success', 'Shared settings updated successfully.');
+    }
+
+    public function generateShareLink(Project $project)
+    {
+        $this->authorizePermission('project_manage_shared_settings');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        if (!$workspace || $project->workspace_id != $workspace->id) {
+            abort(403, 'Project not found in current workspace.');
+        }
+
+        // Create encrypted project ID with timestamp for security
+        $encryptedId = encrypt($project->id . ':' . $project->created_at->timestamp);
+
+        $shareUrl = route('projects.public-view', [
+            'encryptedId' => $encryptedId
+        ]);
+
+        return response()->json([
+            'share_url' => $shareUrl
+        ]);
+    }
+
+    public function gantt(Project $project, $duration = 'Week')
+    {
+        $objUser = auth()->user();
+        $currentWorkspace = $objUser->currentWorkspace;
+
+        if (!$currentWorkspace) {
+            abort(404, 'Workspace not found.');
+        }
+
+        // Ensure project belongs to current workspace
+        if ($project->workspace_id != $currentWorkspace->id) {
+            abort(403, 'Project not found in current workspace.');
+        }
+
+        $userWorkspaceRole = $currentWorkspace->getMemberRole($objUser);
+
+        // Access control
+        if ($userWorkspaceRole !== 'owner') {
+            $hasAccess = $project->members()->where('user_id', $objUser->id)->exists() ||
+                $project->clients()->where('user_id', $objUser->id)->exists();
+
+            // if (!$hasAccess) {
+            //     abort(403, 'Access denied.');
+            // }
+        }
+
+        $project->load(['tasks.taskStage']);
+
+        $tasks = [];
+
+
+
+        foreach ($project->tasks as $task) {
+            $tasks[] = [
+                'id' => 'task_' . $task->id,
+                'name' => $task->title,
+                'start' => $task->start_date,
+                'end' => $task->end_date,
+                'custom_class' => strtolower($task->priority),
+                'progress' => $task->progress ?? 0,
+                'extra' => [
+                    'priority' => ucfirst($task->priority),
+                    'comments' => $task->comments()->count(),
+                    'duration' => $task->start_date && $task->end_date ?
+                        \Carbon\Carbon::parse($task->start_date)->format('M d, Y') . ' - ' .
+                        \Carbon\Carbon::parse($task->end_date)->format('M d, Y') : 'No dates set',
+                ],
+            ];
+        }
+
+        return Inertia::render('projects/Gantt', [
+            'project' => $project,
+            'tasks' => $tasks,
+            'duration' => $duration,
+            'permissions' => $this->getModuleCrudPermissions('project')
+        ]);
+    }
+
+    public function ganttUpdate(Request $request, Project $project)
+    {
+        $objUser = auth()->user();
+        $currentWorkspace = $objUser->currentWorkspace;
+
+        if (!$currentWorkspace) {
+            return response()->json(['is_success' => false, 'message' => 'Workspace not found'], 404);
+        }
+
+        // Ensure project belongs to current workspace
+        if ($project->workspace_id != $currentWorkspace->id) {
+            return response()->json(['is_success' => false, 'message' => 'Project not found in current workspace'], 403);
+        }
+
+        $userWorkspaceRole = $currentWorkspace->getMemberRole($objUser);
+
+        // Access control
+        if ($userWorkspaceRole !== 'owner') {
+            $hasAccess = $project->members()->where('user_id', $objUser->id)->exists();
+
+            if (!$hasAccess) {
+                return response()->json(['is_success' => false, 'message' => 'Access denied'], 403);
+            }
+        }
+
+        $taskId = str_replace('task_', '', $request->task_id);
+        $task = \App\Models\Task::where('id', $taskId)
+            ->where('project_id', $project->id)
+            ->first();
+
+        if (!$task) {
+            return response()->json(['is_success' => false, 'message' => 'Task not found'], 404);
+        }
+
+        // Only allow owners or assigned users to update
+        if ($userWorkspaceRole !== 'owner') {
+            $assignedUsers = explode(',', $task->assign_to ?? '');
+            if (!in_array($objUser->id, $assignedUsers)) {
+                return response()->json(['is_success' => false, 'message' => 'Not authorized to update this task'], 403);
+            }
+        }
+
+        $task->start_date = $request->start;
+        $task->end_date = $request->end;
+        $task->save();
+
+        $task->logActivity('updated', ['description' => "Task '{$task->title}' dates updated via Gantt chart"]);
+
+        return response()->json([
+            'is_success' => true,
+            'message' => 'Task dates updated successfully'
+        ]);
+    }
+
+    public function publicView(Request $request, $encryptedId)
+    {
+        try {
+            // Decrypt the encrypted ID
+            $decrypted = decrypt($encryptedId);
+
+            $parts = explode(':', $decrypted);
+
+            if (count($parts) !== 2) {
+                return redirect()->route('home')->with('error', 'Invalid share link');
+            }
+
+            $projectId = $parts[0];
+            $timestamp = $parts[1];
+
+        } catch (\Exception $e) {
+            // Try to get project ID from session
+            $projectId = session('last_project_id');
+
+            // If we have a project ID in session, redirect to copylink
+            if ($projectId && $project = Project::find($projectId)) {
+                $newEncryptedId = encrypt($project->id . ':' . $project->created_at->timestamp);
+                return redirect()->route('projects.public-view', $newEncryptedId)
+                    ->with('error', 'Share link was corrupted. Redirected to valid link.');
+            }
+
+            // Fallback: redirect to home
+            return redirect()->route('home')->with('error', 'Invalid share link. Please generate a new one.');
+        }
+
+        $project = Project::with([
+            'workspace',
+            'clients',
+            'creator',
+            'members.user',
+            'milestones',
+            'notes.creator',
+            'activities.user',
+            'attachments.mediaItem',
+            'attachments.uploadedBy',
+            'expenses.submitter'
+        ])->findOrFail($projectId);
+
+        // Load budget with computed attributes
+        $budget = \App\Models\ProjectBudget::with(['categories', 'creator'])
+            ->where('project_id', $project->id)
+            ->first();
+
+        if ($budget) {
+            $budget->total_spent = $budget->total_spent;
+            $budget->remaining_budget = $budget->remaining_budget;
+            $budget->utilization_percentage = $budget->utilization_percentage;
+        }
+
+        $project->setRelation('budget', $budget);
+
+        // Load all expenses for this project
+        $expenses = \App\Models\ProjectExpense::with(['submitter', 'budgetCategory'])
+            ->where('project_id', $project->id)
+            ->latest()
+            ->get();
+
+        // Calculate approved expenses total
+        $project->approved_expenses_total = $expenses->where('status', 'approved')->sum('amount');
+
+        $project->setRelation('expenses', $expenses);
+
+        // Load project tasks
+        $project->tasks = \App\Models\Task::with(['taskStage', 'assignedTo', 'creator'])
+            ->where('project_id', $project->id)
+            ->latest()
+            ->get();
+
+        // Load project bugs
+        $project->bugs = \App\Models\Bug::with(['bugStatus', 'assignedTo', 'reportedBy'])
+            ->where('project_id', $project->id)
+            ->latest()
+            ->get();
+
+        // Load project timesheets with detailed entries
+        $timesheets = \App\Models\Timesheet::with([
+            'user',
+            'entries' => function ($query) use ($project) {
+                $query->whereHas('task', function ($taskQuery) use ($project) {
+                    $taskQuery->where('project_id', $project->id);
+                });
+            }
+        ])
+            ->whereHas('entries.task', function ($query) use ($project) {
+                $query->where('project_id', $project->id);
+            })
+            ->latest()
+            ->get()
+            ->map(function ($timesheet) {
+                $timesheet->total_hours = $timesheet->entries->sum('hours');
+                $timesheet->billable_hours = $timesheet->entries->where('is_billable', true)->sum('hours');
+                $timesheet->billable_percentage = $timesheet->total_hours > 0
+                    ? round(($timesheet->billable_hours / $timesheet->total_hours) * 100)
+                    : 0;
+                $timesheet->entries_count = $timesheet->entries->count();
+                return $timesheet;
+            });
+
+        // Calculate project totals (only submitted timesheets)
+        $submittedTimesheets = $timesheets->whereIn('status', ['submitted', 'approved']);
+        $project->total_project_hours = $submittedTimesheets->sum('total_hours');
+        $project->total_billable_hours = $submittedTimesheets->sum('billable_hours');
+        $project->billable_rate_percentage = $project->total_project_hours > 0
+            ? round(($project->total_billable_hours / $project->total_project_hours) * 100)
+            : 0;
+        $project->total_team_members = $timesheets->pluck('user.id')->unique()->count();
+        $project->approved_timesheets_count = $timesheets->where('status', 'approved')->count();
+        $project->submitted_timesheets_percentage = $timesheets->count() > 0
+            ? round(($submittedTimesheets->count() / $timesheets->count()) * 100)
+            : 0;
+
+        $project->setRelation('timesheets', $timesheets);
+
+        // Process all avatars
+        $project->members->each(function ($member) {
+            if ($member->user) {
+                $member->user->avatar = check_file($member->user->avatar)
+                    ? get_file($member->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->clients->each(function ($client) {
+            if ($client) {
+                $client->avatar = check_file($client->avatar)
+                    ? get_file($client->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->notes->each(function ($note) {
+            if ($note->creator) {
+                $note->creator->avatar = check_file($note->creator->avatar)
+                    ? get_file($note->creator->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->expenses->each(function ($expense) {
+            if ($expense->submitter) {
+                $expense->submitter->avatar = check_file($expense->submitter->avatar)
+                    ? get_file($expense->submitter->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->tasks->each(function ($task) {
+            foreach (['assignedTo', 'creator'] as $relation) {
+                if ($task->$relation) {
+                    $task->$relation->avatar = check_file($task->$relation->avatar)
+                        ? get_file($task->$relation->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+            }
+        });
+        $project->bugs->each(function ($bug) {
+            foreach (['assignedTo', 'reportedBy'] as $relation) {
+                if ($bug->$relation) {
+                    $bug->$relation->avatar = check_file($bug->$relation->avatar)
+                        ? get_file($bug->$relation->avatar)
+                        : get_file('avatars/avatar.png');
+                }
+            }
+        });
+        $project->timesheets->each(function ($timesheet) {
+            if ($timesheet->user) {
+                $timesheet->user->avatar = check_file($timesheet->user->avatar)
+                    ? get_file($timesheet->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->attachments->each(function ($attachment) {
+            if ($attachment->uploadedBy) {
+                $attachment->uploadedBy->avatar = check_file($attachment->uploadedBy->avatar)
+                    ? get_file($attachment->uploadedBy->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+        $project->activities->each(function ($activity) {
+            if ($activity->user) {
+                $activity->user->avatar = check_file($activity->user->avatar)
+                    ? get_file($activity->user->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+        });
+
+        // Validate token timestamp matches project creation
+        if ($timestamp != $project->created_at->timestamp) {
+            abort(404, 'Invalid share link');
+        }
+
+        // Check if project has shared settings
+        if (!$project->shared_settings) {
+            abort(404, 'Project sharing is not enabled');
+        }
+
+        // Handle password protection
+        if ($project->password) {
+            if ($request->isMethod('post')) {
+                $password = $request->input('password');
+                if (!$password || !Hash::check($password, $project->password)) {
+                    return back()->withErrors(['password' => 'Invalid password']);
+                }
+                // Store in session that password is verified
+                session(['project_' . $project->id . '_verified' => true]);
+            } else {
+                // Check if already verified
+                if (!session('project_' . $project->id . '_verified')) {
+                    return Inertia::render('projects/PublicPasswordPrompt', [
+                        'project' => $project,
+                        'encryptedId' => $encryptedId
+                    ]);
+                }
+            }
+        }
+
+        // Get workspace settings for theme colors
+        $workspace = $project->workspace;
+        $workspaceSettings = [];
+
+        if ($workspace && $workspace->owner_id) {
+            try {
+                $workspaceSettings = settings($workspace->owner_id, $workspace->id);
+            } catch (\Exception $e) {
+                $workspaceSettings = settings();
+            }
+        } else {
+            $workspaceSettings = settings();
+        }
+
+        // Get available languages for language switcher
+        $languagesFile = resource_path('lang/language.json');
+        $availableLanguages = [];
+        if (file_exists($languagesFile)) {
+            $availableLanguages = json_decode(file_get_contents($languagesFile), true) ?? [];
+        }
+        $workspaceSettings['availableLanguages'] = $availableLanguages;
+
+        return Inertia::render('projects/copylink_setting', [
+            'project' => $project,
+            'encryptedId' => $encryptedId,
+            'globalSettings' => $workspaceSettings
+        ]);
+    }
+
+
+
+
 }

@@ -329,4 +329,18 @@ class Invoice extends Model
             default => parent::getActivityDescription($action)
         };
     }
+
+    public function getTaxRateAttribute($value)
+    {
+        if (is_string($value) && !empty($value)) {
+            $decoded = json_decode($value, true);
+            return (is_array($decoded) && json_last_error() === JSON_ERROR_NONE) ? $decoded : [];
+        }
+        return is_array($value) ? $value : [];
+    }
+
+    public function setTaxRateAttribute($value)
+    {
+        $this->attributes['tax_rate'] = is_array($value) ? json_encode($value) : $value;
+    }
 }

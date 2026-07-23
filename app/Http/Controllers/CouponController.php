@@ -38,12 +38,66 @@ class CouponController extends BaseController
             $query->where('status', $request->status);
         }
 
+        // Apply sorting
+        $sortField = $request->get('sort_field', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        
+        // Validate sort field to prevent SQL injection
+        $allowedSortFields = ['name', 'code', 'type', 'expiry_date', 'created_at'];
+        if (!in_array($sortField, $allowedSortFields)) {
+            $sortField = 'created_at';
+        }
+        
+        // Validate sort direction
+        if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+        
+        $query->orderBy($sortField, $sortDirection);
+
         $perPage = $request->get('per_page', 10);
-        $coupons = $query->latest()->paginate($perPage);
+        $coupons = $query->paginate($perPage);
 
         return Inertia::render('coupons/index', [
             'coupons' => $coupons,
-            'filters' => $request->only(['search', 'type', 'status', 'per_page'])
+            'filters' => $request->only(['search', 'type', 'status', 'per_page', 'sort_field', 'sort_direction'])
+        ]);
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(Request $request, Coupon $coupon)
+    {
+        $this->authorizePermission('coupon_view');
+        
+        $coupon->load('creator');
+        
+        // Get usage history from plan_orders table
+        $usageHistory = \DB::table('plan_orders')
+            ->join('users', 'plan_orders.user_id', '=', 'users.id')
+            ->join('plans', 'plan_orders.plan_id', '=', 'plans.id')
+            ->where('plan_orders.coupon_id', $coupon->id)
+            ->select(
+                'plan_orders.id',
+                'users.name as user_name',
+                'users.email as user_email',
+                'plan_orders.order_number',
+                'plan_orders.original_price as amount',
+                'plan_orders.discount_amount',
+                'plan_orders.created_at as used_at'
+            )
+            ->orderBy('plan_orders.created_at', 'desc')
+            ->paginate($request->get('per_page', 10));
+        
+        // Calculate used count
+        $coupon->used_count = \DB::table('plan_orders')
+            ->where('coupon_id', $coupon->id)
+            ->count();
+        
+        return Inertia::render('coupons/show', [
+            'coupon' => $coupon,
+            'usage_history' => $usageHistory
         ]);
     }
 

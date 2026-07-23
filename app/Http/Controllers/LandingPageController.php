@@ -24,6 +24,34 @@ class LandingPageController extends Controller
         
         $landingSettings = LandingPageSetting::getSettings();
         
+        // Get logo from appropriate user based on mode
+        $logoUser = null;
+        if (config('app.is_saas')) {
+            // In SaaS mode, get logo from superadmin
+            $logoUser = \App\Models\User::where('type', 'superadmin')->first();
+        } else {
+            // In non-SaaS mode, get logo from company user with owner role in workspace_member
+            $ownerMember = \App\Models\WorkspaceMember::where('role', 'owner')
+                ->with('user')
+                ->first();
+            if ($ownerMember) {
+                $logoUser = $ownerMember->user;
+            }
+        }
+        
+        // Get logo settings from the appropriate user
+        $logoLight = null;
+        $logoDark = null;
+        if ($logoUser) {
+            $workspaceId = config('app.is_saas') ? null : $logoUser->current_workspace_id;
+            $logoLightPath = getSetting('logoLight', null, $logoUser->id, $workspaceId);
+            $logoDarkPath = getSetting('logoDark', null, $logoUser->id, $workspaceId);
+            
+            // Convert paths to full URLs
+            $logoLight = $logoLightPath ? getFile($logoLightPath) : null;
+            $logoDark = $logoDarkPath ? getFile($logoDarkPath) : null;
+        }
+        
         // Only load plans if SaaS mode is enabled
         $plans = collect([]);
         if (config('app.is_saas')) {
@@ -88,6 +116,8 @@ class LandingPageController extends Controller
             'customPages' => LandingPageCustomPage::active()->ordered()->get() ?? [],
             'settings' => $landingSettings,
             'isSaas' => config('app.is_saas'),
+            'logoLight' => $logoLight,
+            'logoDark' => $logoDark,
         ]);
     }
 
