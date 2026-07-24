@@ -498,6 +498,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('chatbot', [ChatbotController::class, 'index'])->name('chatbot.index');
         Route::post('chatbot/ask', [ChatbotController::class, 'ask'])->name('chatbot.ask');
 
+        // ── AI UVP Modules ────────────────────────────────────────────────
+        Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->name('standup.index');
+        Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->name('standup.api');
+
+        Route::get('risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'index'])->name('risk-radar.index');
+        Route::get('api/risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'api'])->name('risk-radar.api');
+
+        Route::post('ai/projects/parse', [\App\Http\Controllers\AiProjectController::class, 'parse'])->name('ai.projects.parse');
+        Route::post('ai/projects/create', [\App\Http\Controllers\AiProjectController::class, 'create'])->name('ai.projects.create');
+
+        Route::get('resource-conflicts', [\App\Http\Controllers\ResourceConflictController::class, 'index'])->name('resource-conflicts.index');
+        Route::get('api/resource-conflicts', [\App\Http\Controllers\ResourceConflictController::class, 'api'])->name('resource-conflicts.api');
+
         // BYOA — API Keys
         Route::get('api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');
         Route::post('api-keys', [ApiKeyController::class, 'store'])->name('api-keys.store');
@@ -559,6 +572,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('projects/create', [\App\Http\Controllers\ProjectController::class, 'create'])->middleware('permission:project_create')->name('projects.create');
         Route::post('projects', [\App\Http\Controllers\ProjectController::class, 'store'])->middleware('permission:project_create')->name('projects.store');
         Route::get('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'show'])->middleware('permission:project_view')->name('projects.show');
+        Route::get('projects/{project}/health', [\App\Http\Controllers\ProjectController::class, 'health'])->middleware('permission:project_view')->name('projects.health');
+        Route::get('projects/{project}/scope-creep', [\App\Http\Controllers\ProjectController::class, 'scopeCreep'])->middleware('permission:project_view')->name('projects.scope-creep');
         Route::get('projects/{project}/edit', [\App\Http\Controllers\ProjectController::class, 'edit'])->middleware('permission:project_update')->name('projects.edit');
         Route::put('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'update'])->middleware('permission:project_update')->name('projects.update');
         Route::patch('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'update'])->middleware('permission:project_update');

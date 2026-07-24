@@ -16,25 +16,47 @@
             }
         }
     }
+
+    // Determine dark mode server-side to avoid flash
+    $themeMode = 'light';
+    // 1. Cookie wins (user's toggled preference — plain JSON, not encrypted)
+    if (!empty($_COOKIE['themeSettings'])) {
+        try {
+            $cookieVal = urldecode($_COOKIE['themeSettings']);
+            $cookieData = json_decode($cookieVal, true);
+            if (isset($cookieData['appearance'])) {
+                $themeMode = $cookieData['appearance'];
+            }
+        } catch (\Exception $e) {}
+    }
+    // 2. Fallback to DB setting
+    if ($themeMode === 'light') {
+        $dbMode = getSetting('themeMode', 'light');
+        if ($dbMode === 'dark') $themeMode = 'dark';
+    }
+    $isDark = $themeMode === 'dark';
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $direction }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $direction }}" @class(['dark' => $isDark])>
     <head>
         <base href="{{ \Illuminate\Support\Facades\Request::getBasePath() }}">
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
+        {{-- No-flash theme script: server already applied class, this just handles system preference edge case --}}
         <script>
             (function() {
-                const appearance = '{{ $appearance ?? "system" }}';
-
-                if (appearance === 'system') {
-                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-                    if (prefersDark) {
-                        document.documentElement.classList.add('dark');
+                // Dark class already injected by server if cookie/DB says dark.
+                // Only apply system preference if neither cookie nor DB specified dark mode.
+                var htmlEl = document.documentElement;
+                if (!htmlEl.classList.contains('dark')) {
+                    var appearance = '{{ $appearance ?? "system" }}';
+                    if (appearance === 'system') {
+                        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        if (prefersDark) {
+                            htmlEl.classList.add('dark');
+                        }
                     }
                 }
             })();
@@ -57,7 +79,6 @@
         @php
             $seoSettings = settings();
         @endphp
-        <!-- Debug: {{ json_encode($seoSettings) }} -->
         @if(!empty($seoSettings['metaKeywords']))
             <meta name="keywords" content="{{ $seoSettings['metaKeywords'] }}">
         @endif

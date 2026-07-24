@@ -8,7 +8,7 @@ import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import NavigationTimer from '@/components/timesheets/NavigationTimer';
 import { usePage, router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import { Building2,Sun,Moon } from 'lucide-react';
+import { Building2, Sun, Moon, Search } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 
@@ -97,12 +97,20 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                 setCookie('themeSettings', JSON.stringify({ appearance: newMode }));
             }
         } else {
-            // Main: save to database
+            // Main: save to cookie for instant persistence across navigation
+            try {
+                const existing = getCookie('themeSettings');
+                const parsed = existing ? JSON.parse(existing) : {};
+                setCookie('themeSettings', JSON.stringify({ ...parsed, appearance: newMode }));
+            } catch {
+                setCookie('themeSettings', JSON.stringify({ appearance: newMode }));
+            }
+            // Also persist to database in background
             router.post(route('settings.brand.update'), {
                 settings: {
                     themeMode: newMode,
                 }
-            }, { preserveScroll: true, preserveState: true });
+            }, { preserveScroll: true, preserveState: true, onError: () => {} });
         }
     };
 
@@ -141,6 +149,17 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                             ? <Sun className="h-4 w-4 text-yellow-500" />
                             : <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                         }
+                    </button>
+
+                    {/* ⌘K Command Palette trigger */}
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-command-palette'))}
+                        className="hidden sm:flex items-center gap-2 h-9 px-3 rounded-md border shadow-sm bg-white dark:bg-gray-900 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-xs text-muted-foreground"
+                        title={t('Search everything (⌘K)')}
+                    >
+                        <Search className="h-3.5 w-3.5" />
+                        <span className="hidden md:inline">{t('Search...')}</span>
+                        <kbd className="hidden md:inline-flex h-4 items-center rounded border bg-muted px-1 font-mono text-[9px]">⌘K</kbd>
                     </button>
                     {auth?.user?.type !== 'superadmin' && <NavigationTimer />}
                     <WorkspaceSwitcher />

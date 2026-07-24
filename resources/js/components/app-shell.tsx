@@ -2,6 +2,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLayout } from '@/contexts/LayoutContext';
 import { FloatingChatGpt } from '@/components/FloatingChatGpt';
 import CookieConsentBanner from '@/components/privacy-notice';
+import { CommandPalette } from '@/components/CommandPalette';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -25,6 +26,7 @@ export function AppShell({ children, variant = 'header' }: AppShellProps) {
         return (
             <div className="flex min-h-screen w-full flex-col">
                 {children}
+                <CommandPalette />
                 <FloatingChatGpt />
                 <CookieConsentBanner />
             </div>
@@ -43,6 +45,7 @@ export function AppShell({ children, variant = 'header' }: AppShellProps) {
         <SidebarProvider defaultOpen={isOpen} open={isOpen} onOpenChange={handleSidebarChange}>
             <div className="flex w-full">
                 {children}
+                <CommandPalette />
                 <FloatingChatGpt />
                 <CookieConsentBanner />
             </div>

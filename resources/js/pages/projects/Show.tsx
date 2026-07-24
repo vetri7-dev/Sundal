@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
+import { ProjectHealthWidget } from '@/components/ProjectHealthWidget';
+import { ScopeCreepWidget } from '@/components/ScopeCreepWidget';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -834,6 +836,12 @@ export default function ProjectShow() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* AI Health Score */}
+                    <ProjectHealthWidget projectId={project.id} />
+
+                    {/* Scope Creep Detector */}
+                    <ScopeCreepWidget projectId={project.id} />
                 </div>
             </div>
 

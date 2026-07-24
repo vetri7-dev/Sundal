@@ -351,6 +351,19 @@ class HandleInertiaRequests extends Middleware
     {
         $cookieOverrides = [];
 
+        // Theme settings cookie — dark/light mode preference
+        $themeCookie = $request->cookie('themeSettings');
+        if ($themeCookie) {
+            try {
+                $themeData = json_decode($themeCookie, true);
+                if ($themeData) {
+                    if (isset($themeData['appearance']))
+                        $cookieOverrides['themeMode'] = $themeData['appearance'];
+                }
+            } catch (\Exception $e) {
+            }
+        }
+
         // Sidebar settings cookie
         $sidebarCookie = $request->cookie('sidebarSettings');
         if ($sidebarCookie) {

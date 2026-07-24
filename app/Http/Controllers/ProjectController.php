@@ -6,6 +6,8 @@ use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\User;
 use App\Services\PlanLimitService;
+use App\Services\ProjectHealthService;
+use App\Services\ScopeCreepService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -491,6 +493,33 @@ class ProjectController extends Controller
         $project->logActivity('updated', "Project '{$project->title}' was updated");
 
         return redirect()->route('projects.show', $project);
+    }
+
+    public function health(Project $project): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizePermission('project_view_any');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        if (!$workspace || $project->workspace_id != $workspace->id) {
+            abort(403);
+        }
+
+        $health = (new ProjectHealthService())->calculate($project);
+
+        return response()->json($health);
+    }
+
+    public function scopeCreep(Project $project): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizePermission('project_view_any');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        if (!$workspace || $project->workspace_id != $workspace->id) abort(403);
+
+        return response()->json((new ScopeCreepService())->detect($project));
     }
 
     public function destroy(Project $project)

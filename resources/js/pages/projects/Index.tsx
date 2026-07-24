@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List, FileText, Clock, CalendarDays, FileUp, FileDown, Users, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List, FileText, Clock, CalendarDays, FileUp, FileDown, Users, CheckCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { AiProjectModal } from '@/components/AiProjectModal';
+import { EmptyState, EMPTY_STATES } from '@/components/EmptyState';
 import { PageTemplate } from '@/components/page-template';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
@@ -51,6 +53,7 @@ export default function ProjectIndex() {
     const [currentItem, setCurrentItem] = useState<any>(null);
     const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
     // Handle flash messages
     useEffect(() => {
@@ -295,6 +298,12 @@ export default function ProjectIndex() {
     }
     
     if (hasPermission(permissions, 'project_create')) {
+        pageActions.push({
+            label: t('AI Generate'),
+            icon: <Sparkles className="h-4 w-4 mr-2" />,
+            variant: 'outline',
+            onClick: () => setIsAiModalOpen(true)
+        });
         pageActions.push({
             label: t('Add Project'),
             icon: <Plus className="h-4 w-4 mr-2" />,
@@ -626,7 +635,14 @@ export default function ProjectIndex() {
             </div>
 
             {/* Projects Content */}
-            {(activeView === 'grid' || !activeView) ? (
+            {(projects?.data?.length === 0) && (
+                <EmptyState
+                    {...EMPTY_STATES.projects}
+                    action={hasPermission(permissions, 'project_create') ? { label: 'Create Your First Project', onClick: handleAddNew, icon: <Plus className="h-4 w-4" /> } : undefined}
+                    secondaryAction={hasPermission(permissions, 'project_create') ? { label: 'AI Generate', onClick: () => setIsAiModalOpen(true) } : undefined}
+                />
+            )}
+            {(activeView === 'grid' || !activeView) && (projects?.data?.length ?? 0) > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
                 {projects?.data?.map((project: any) => (
                     <Card key={project.id} className="overflow-hidden hover:shadow-md transition-shadow">
@@ -931,6 +947,9 @@ export default function ProjectIndex() {
                 type="projects"
                 title={t('Projects')}
             />
+
+            {/* AI Project Generator */}
+            <AiProjectModal open={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} />
         </PageTemplate>
     );
 }

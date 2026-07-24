@@ -8,7 +8,7 @@ import { useBrand } from '@/contexts/BrandContext';
 
 import { type NavItem } from '@/types';
 import { Link, usePage, router } from '@inertiajs/react';
-import { BookOpen, Contact, Folder, LayoutGrid, ShoppingBag, Users, Tag, FileIcon, Settings, BarChart, Barcode, FileText, Briefcase, CheckSquare, Calendar, CreditCard, Nfc, Ticket, Gift, DollarSign, MessageSquare, CalendarDays, Palette, Image, Mail, Mail as VCard, ChevronDown, Building2, Globe, FolderOpen, FolderKanban, ClipboardList, Zap, Clock, Bug, Receipt, TrendingUp, Bot, Video, Bell, HelpCircle, Workflow, Activity, Archive, ListTodo } from 'lucide-react';
+import { BookOpen, Contact, Folder, LayoutGrid, ShoppingBag, Users, Tag, FileIcon, Settings, BarChart, Barcode, FileText, Briefcase, CheckSquare, Calendar, CreditCard, Nfc, Ticket, Gift, DollarSign, MessageSquare, CalendarDays, Palette, Image, Mail, Mail as VCard, ChevronDown, Building2, Globe, FolderOpen, FolderKanban, ClipboardList, Zap, Clock, Bug, Receipt, TrendingUp, Bot, Video, Bell, HelpCircle, Workflow, Activity, Archive, ListTodo, AlertTriangle, Radio } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import AppLogo from './app-logo';
@@ -160,6 +160,11 @@ export function AppSidebar() {
 
         // Chat (custom) — always show when authenticated
         items.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: t('Communications & Content') });
+
+        // AI Modules
+        items.push({ title: t('Standup Bot'), href: route('standup.index'), icon: CheckSquare, group: t('AI Tools') });
+        items.push({ title: t('Risk Radar'), href: route('risk-radar.index'), icon: Radio, group: t('AI Tools') });
+        items.push({ title: t('Resource Conflicts'), href: route('resource-conflicts.index'), icon: AlertTriangle, group: t('AI Tools') });
 
         // Integrations (custom)
         const integrationChildren: { title: string; href: string }[] = [

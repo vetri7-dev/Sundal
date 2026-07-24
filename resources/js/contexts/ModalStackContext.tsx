@@ -4,6 +4,7 @@ interface ModalStackContextType {
   registerModal: (id: string) => number;
   unregisterModal: (id: string) => void;
   getZIndex: (id: string) => number;
+  modalStack: string[];
 }
 
 const ModalStackContext = createContext<ModalStackContextType | undefined>(undefined);
@@ -30,7 +31,7 @@ export function ModalStackProvider({ children }: { children: React.ReactNode }) 
   }, [modalStack]);
 
   return (
-    <ModalStackContext.Provider value={{ registerModal, unregisterModal, getZIndex }}>
+    <ModalStackContext.Provider value={{ registerModal, unregisterModal, getZIndex, modalStack }}>
       {children}
     </ModalStackContext.Provider>
   );

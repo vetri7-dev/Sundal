@@ -16,9 +16,28 @@
             }
         }
     }
+
+    // Determine dark mode server-side to avoid flash
+    $themeMode = 'light';
+    // 1. Cookie wins (user's toggled preference — plain JSON, not encrypted)
+    if (!empty($_COOKIE['themeSettings'])) {
+        try {
+            $cookieVal = urldecode($_COOKIE['themeSettings']);
+            $cookieData = json_decode($cookieVal, true);
+            if (isset($cookieData['appearance'])) {
+                $themeMode = $cookieData['appearance'];
+            }
+        } catch (\Exception $e) {}
+    }
+    // 2. Fallback to DB setting
+    if ($themeMode === 'light') {
+        $dbMode = getSetting('themeMode', 'light');
+        if ($dbMode === 'dark') $themeMode = 'dark';
+    }
+    $isDark = $themeMode === 'dark';
 ?>
 <!DOCTYPE html>
-<html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>" dir="<?php echo e($direction); ?>" class="<?php echo \Illuminate\Support\Arr::toCssClasses(['dark' => ($appearance ?? 'system') == 'dark']); ?>">
+<html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>" dir="<?php echo e($direction); ?>" class="<?php echo \Illuminate\Support\Arr::toCssClasses(['dark' => $isDark]); ?>">
     <head>
         <base href="<?php echo e(\Illuminate\Support\Facades\Request::getBasePath()); ?>">
         <meta charset="utf-8">
@@ -28,13 +47,16 @@
         
         <script>
             (function() {
-                const appearance = '<?php echo e($appearance ?? "system"); ?>';
-
-                if (appearance === 'system') {
-                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-                    if (prefersDark) {
-                        document.documentElement.classList.add('dark');
+                // Dark class already injected by server if cookie/DB says dark.
+                // Only apply system preference if neither cookie nor DB specified dark mode.
+                var htmlEl = document.documentElement;
+                if (!htmlEl.classList.contains('dark')) {
+                    var appearance = '<?php echo e($appearance ?? "system"); ?>';
+                    if (appearance === 'system') {
+                        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        if (prefersDark) {
+                            htmlEl.classList.add('dark');
+                        }
                     }
                 }
             })();
@@ -57,7 +79,6 @@
         <?php
             $seoSettings = settings();
         ?>
-        <!-- Debug: <?php echo e(json_encode($seoSettings)); ?> -->
         <?php if(!empty($seoSettings['metaKeywords'])): ?>
             <meta name="keywords" content="<?php echo e($seoSettings['metaKeywords']); ?>">
         <?php endif; ?>
