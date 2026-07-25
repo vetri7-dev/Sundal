@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -15,5 +16,14 @@ abstract class TestCase extends BaseTestCase
         }
 
         parent::setUp();
+
+        // Disable FK checks for MySQL test database
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+    }
+
+    protected function tearDown(): void
+    {
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        parent::tearDown();
     }
 }

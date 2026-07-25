@@ -461,15 +461,7 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
         parent::boot();
         
         static::creating(function ($user) {
-            if (isSaasMode() && $user->type === 'company' && !$user->referral_code) {
-                // Generate referral code after the user is saved to get the ID
-                static::created(function ($createdUser) {
-                    if (isSaasMode() && !$createdUser->referral_code) {
-                        $createdUser->referral_code = 'REF' . str_pad($createdUser->id, 6, '0', STR_PAD_LEFT);
-                        $createdUser->save();
-                    }
-                });
-            }
+            // referral_code is set by UserObserver after creation (integer format)
         });
         
         static::created(function ($user) {

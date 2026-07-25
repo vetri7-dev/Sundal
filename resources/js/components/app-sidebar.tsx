@@ -161,11 +161,6 @@ export function AppSidebar() {
         // Chat (custom) — always show when authenticated
         items.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: t('Communications & Content') });
 
-        // AI Modules
-        items.push({ title: t('Standup Bot'), href: route('standup.index'), icon: CheckSquare, group: t('AI Tools') });
-        items.push({ title: t('Risk Radar'), href: route('risk-radar.index'), icon: Radio, group: t('AI Tools') });
-        items.push({ title: t('Resource Conflicts'), href: route('resource-conflicts.index'), icon: AlertTriangle, group: t('AI Tools') });
-
         // Integrations (custom)
         const integrationChildren: { title: string; href: string }[] = [
             { title: t('Knowledge Base'), href: route('kb.index') },
@@ -178,6 +173,11 @@ export function AppSidebar() {
         if (hasPermission(permissions, 'media_view_any')) {
             items.push({ title: t('Media Library'), href: route('media-library'), icon: Image, group: t('Communications & Content') });
         }
+
+        // AI Modules
+        items.push({ title: t('Standup Bot'), href: route('standup.index'), icon: CheckSquare, group: t('AI Tools') });
+        items.push({ title: t('Risk Radar'), href: route('risk-radar.index'), icon: Radio, group: t('AI Tools') });
+        items.push({ title: t('Resource Conflicts'), href: route('resource-conflicts.index'), icon: AlertTriangle, group: t('AI Tools') });
 
         return items;
     };
@@ -243,7 +243,7 @@ export function AppSidebar() {
 
     const { position, effectivePosition, isRtl } = useLayout();
     const { variant, collapsible, style } = useSidebarSettings();
-    const { logoLight, logoDark, favicon, updateBrandSettings } = useBrand();
+    const { logoLight, logoDark, favicon, titleText, updateBrandSettings } = useBrand();
     const [sidebarStyle, setSidebarStyle] = useState({});
 
     useEffect(() => {
@@ -307,8 +307,15 @@ export function AppSidebar() {
                                         onError={() => updateBrandSettings({ [isDark ? 'logoLight' : 'logoDark']: '' })}
                                     />
                                 ) : (
-                                    <div className="h-8 text-inherit font-semibold flex items-center text-lg tracking-tight">
-                                        WorkDo
+                                    <div className="h-8 flex items-center gap-1.5">
+                                        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                                            <span className="text-primary-foreground font-bold text-sm leading-none">
+                                                {(titleText || 'S')[0].toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <span className="font-bold text-base tracking-tight text-sidebar-foreground">
+                                            {titleText || 'SUNDAL'}
+                                        </span>
                                     </div>
                                 );
                             })()}
@@ -332,8 +339,8 @@ export function AppSidebar() {
                                         onError={() => updateBrandSettings({ favicon: '' })}
                                     />
                                 ) : (
-                                    <div className="h-8 w-8 bg-primary text-white rounded flex items-center justify-center font-bold shadow-sm">
-                                        W
+                                    <div className="h-8 w-8 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-sm shadow-sm">
+                                        {(titleText || 'S')[0].toUpperCase()}
                                     </div>
                                 );
                             })()}

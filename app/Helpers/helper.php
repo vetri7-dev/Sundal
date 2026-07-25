@@ -1360,42 +1360,50 @@ if (! function_exists('getTwilioConfig')) {
 if (! function_exists('isSlackNotificationEnabled')) {
     function isSlackNotificationEnabled($notificationType, $userId = null, $workspaceId = null)
     {
-        if (is_null($userId)) {
-            $userId = createdBy();
-        }
-        
-        $slackNotifications = \App\Models\SlackSetting::where('user_id', $userId)
-            ->where('workspace_id', $workspaceId)
-            ->where('key', 'slack_notifications')
-            ->first();
-            
-        if (!$slackNotifications) {
+        try {
+            if (is_null($userId)) {
+                $userId = createdBy();
+            }
+
+            $slackNotifications = \App\Models\SlackSetting::where('user_id', $userId)
+                ->where('workspace_id', $workspaceId)
+                ->where('key', 'slack_notifications')
+                ->first();
+
+            if (!$slackNotifications) {
+                return false;
+            }
+
+            $notifications = json_decode($slackNotifications->value, true);
+            return $notifications[$notificationType] ?? false;
+        } catch (\Exception $e) {
             return false;
         }
-        
-        $notifications = json_decode($slackNotifications->value, true);
-        return $notifications[$notificationType] ?? false;
     }
 }
 
 if (! function_exists('isTelegramNotificationEnabled')) {
     function isTelegramNotificationEnabled($notificationType, $userId = null, $workspaceId = null)
     {
-        if (is_null($userId)) {
-            $userId = createdBy();
-        }
-        
-        $telegramNotifications = \App\Models\TelegramSetting::where('user_id', $userId)
-            ->where('workspace_id', $workspaceId)
-            ->where('key', 'telegram_notifications')
-            ->first();
-            
-        if (!$telegramNotifications) {
+        try {
+            if (is_null($userId)) {
+                $userId = createdBy();
+            }
+
+            $telegramNotifications = \App\Models\TelegramSetting::where('user_id', $userId)
+                ->where('workspace_id', $workspaceId)
+                ->where('key', 'telegram_notifications')
+                ->first();
+
+            if (!$telegramNotifications) {
+                return false;
+            }
+
+            $notifications = json_decode($telegramNotifications->value, true);
+            return $notifications[$notificationType] ?? false;
+        } catch (\Exception $e) {
             return false;
         }
-        
-        $notifications = json_decode($telegramNotifications->value, true);
-        return $notifications[$notificationType] ?? false;
     }
 }
 
